@@ -106,25 +106,6 @@ Verification lanes:
 - `npm run check:rust` runs `cargo check` and Rust tests
 - `npm run check` is the main repository baseline
 
-## GitHub Packaging Outputs
-
-KafkaDesk now includes a GitHub Actions packaging workflow at [`.github/workflows/package-desktop-bundles.yml`](./.github/workflows/package-desktop-bundles.yml).
-
-That workflow currently builds unsigned desktop bundle archives for:
-
-- macOS x64
-- macOS arm64
-- Windows x64
-- Linux x64
-
-Current GitHub packaging behavior:
-
-- manual runs via `workflow_dispatch` build per-platform bundle archives and upload them as GitHub Actions artifacts
-- published GitHub release runs build the same per-platform archives and attach them to the GitHub Release as downloadable assets
-- each job uses the existing `npm run tauri:build` entry point, so the workflow follows the repository's checked-in Tauri build path
-- exact bundle contents remain platform-specific because Tauri emits different installer/package formats on different operating systems
-- signing, notarization, and broader release sign-off are still manual and are not automated by this workflow
-
 ## Runtime Guarantees and Safety Posture
 
 KafkaDesk favors truthful runtime behavior over optimistic success states.
