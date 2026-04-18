@@ -28,6 +28,8 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
 
       - name: Install frontend dependencies
         run: npm ci
