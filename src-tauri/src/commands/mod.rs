@@ -1,0 +1,14 @@
+pub mod audit;
+pub mod bookmarks;
+pub mod clusters;
+pub mod correlation;
+pub mod groups;
+pub mod messages;
+pub mod preferences;
+pub mod replay;
+pub mod replay_policy;
+pub mod saved_queries;
+pub mod schema_registry;
+pub mod system;
+pub mod topics;
+pub mod trace;

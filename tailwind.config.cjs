@@ -1,0 +1,71 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  theme: {
+    extend: {
+      colors: {
+        app: 'hsl(var(--bg-app) / <alpha-value>)',
+        surface: 'hsl(var(--bg-surface) / <alpha-value>)',
+        panel: 'hsl(var(--bg-panel) / <alpha-value>)',
+        elevated: 'hsl(var(--bg-elevated) / <alpha-value>)',
+        line: 'hsl(var(--border-subtle) / <alpha-value>)',
+        'line-strong': 'hsl(var(--border-strong) / <alpha-value>)',
+        ink: 'hsl(var(--text-primary) / <alpha-value>)',
+        'ink-dim': 'hsl(var(--text-secondary) / <alpha-value>)',
+        'ink-muted': 'hsl(var(--text-muted) / <alpha-value>)',
+        signal: 'hsl(var(--accent-inspect) / <alpha-value>)',
+        info: 'hsl(var(--accent-info) / <alpha-value>)',
+        success: 'hsl(var(--accent-success) / <alpha-value>)',
+        warning: 'hsl(var(--accent-warning) / <alpha-value>)',
+        danger: 'hsl(var(--accent-danger) / <alpha-value>)',
+        trace: 'hsl(var(--accent-trace) / <alpha-value>)',
+      },
+      fontFamily: {
+        display: ['Rajdhani', 'sans-serif'],
+        sans: ['IBM Plex Sans', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'monospace'],
+      },
+      spacing: {
+        1: 'var(--space-1)',
+        2: 'var(--space-2)',
+        3: 'var(--space-3)',
+        4: 'var(--space-4)',
+        5: 'var(--space-5)',
+        6: 'var(--space-6)',
+        7: 'var(--space-7)',
+        8: 'var(--space-8)',
+        9: 'var(--space-9)',
+        10: 'var(--space-10)',
+        11: 'var(--space-11)',
+        12: 'var(--space-12)',
+        14: 'var(--space-14)',
+        16: 'var(--space-16)',
+      },
+      borderRadius: {
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        panel: 'var(--radius-panel)',
+      },
+      boxShadow: {
+        panel: 'var(--shadow-panel)',
+        chrome: 'var(--shadow-chrome)',
+        glow: 'var(--glow-signal)',
+      },
+      fontSize: {
+        display: ['1.875rem', { lineHeight: '1.05', letterSpacing: '0.08em' }],
+        section: ['1.05rem', { lineHeight: '1.2', letterSpacing: '0.12em' }],
+        body: ['0.95rem', { lineHeight: '1.55' }],
+        table: ['0.82rem', { lineHeight: '1.4' }],
+        label: ['0.68rem', { lineHeight: '1.15', letterSpacing: '0.18em' }],
+      },
+      letterSpacing: {
+        signal: '0.16em',
+        tightish: '0.04em',
+      },
+      backgroundImage: {
+        grid: 'linear-gradient(hsl(var(--border-subtle) / 0.18) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--border-subtle) / 0.18) 1px, transparent 1px)',
+      },
+    },
+  },
+  plugins: [],
+};

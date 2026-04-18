@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+.sisyphus/
+
+*.log
+*.tsbuildinfo
+
+.DS_Store
+
+vite.config.d.ts
+vite.config.js
+
+src-tauri/target/

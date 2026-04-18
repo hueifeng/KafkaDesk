@@ -1,0 +1,94 @@
+name: package-desktop-bundles
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macOS x64 bundle
+            runner: macos-13
+            platform_id: macos-x64
+          - label: macOS arm64 bundle
+            runner: macos-14
+            platform_id: macos-arm64
+          - label: Windows x64 bundle
+            runner: windows-latest
+            platform_id: windows-x64
+          - label: Linux x64 bundle
+            runner: ubuntu-22.04
+            platform_id: linux-x64
+
+    env:
+      NODE_VERSION: "22"
+      ARCHIVE_BASENAME: kafkadesk-${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}-${{ matrix.platform_id }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: swatinem/rust-cache@v2
+
+      - name: Install Linux packaging dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev libxdo-dev patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build desktop bundles
+        run: npm run tauri:build
+
+      - name: Archive bundle output (Unix)
+        if: runner.os != 'Windows'
+        id: archive_unix
+        shell: bash
+        run: |
+          archive_path="$RUNNER_TEMP/$ARCHIVE_BASENAME.tar.gz"
+          tar -C src-tauri/target/release -czf "$archive_path" bundle
+          echo "archive_path=$archive_path" >> "$GITHUB_OUTPUT"
+
+      - name: Archive bundle output (Windows)
+        if: runner.os == 'Windows'
+        id: archive_windows
+        shell: pwsh
+        run: |
+          $archivePath = Join-Path $env:RUNNER_TEMP "$env:ARCHIVE_BASENAME.zip"
+          Compress-Archive -Path "src-tauri/target/release/bundle" -DestinationPath $archivePath -Force
+          "archive_path=$archivePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE_BASENAME }}
+          path: ${{ steps.archive_unix.outputs.archive_path || steps.archive_windows.outputs.archive_path }}
+          if-no-files-found: error
+
+      - name: Attach bundle archive to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.archive_unix.outputs.archive_path || steps.archive_windows.outputs.archive_path }}
+          fail_on_unmatched_files: true
