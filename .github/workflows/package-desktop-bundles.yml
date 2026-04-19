@@ -2,9 +2,9 @@ name: package-desktop-bundles
 
 on:
   workflow_dispatch:
-  release:
-    types:
-      - published
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -33,11 +33,59 @@ jobs:
 
     env:
       NODE_VERSION: "22"
-      ARCHIVE_BASENAME: kafkadesk-${{ github.event_name == 'release' && github.event.release.tag_name || github.sha }}-${{ matrix.platform_id }}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: release_meta
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path('.')
+          package_version = json.loads((root / 'package.json').read_text())['version']
+          tauri_version = json.loads((root / 'src-tauri/tauri.conf.json').read_text())['version']
+          cargo_text = (root / 'src-tauri' / 'Cargo.toml').read_text()
+          cargo_match = re.search(r'(?m)^version = "([^"]+)"', cargo_text)
+
+          if cargo_match is None:
+              raise SystemExit('Could not determine Cargo version from src-tauri/Cargo.toml')
+
+          cargo_version = cargo_match.group(1)
+          versions = {package_version, tauri_version, cargo_version}
+          if len(versions) != 1:
+              raise SystemExit(
+                  f'Version mismatch detected: package.json={package_version}, '
+                  f'tauri.conf.json={tauri_version}, Cargo.toml={cargo_version}'
+              )
+
+          release_version = tauri_version
+          ref_type = os.environ.get('GITHUB_REF_TYPE', '')
+          ref_name = os.environ.get('GITHUB_REF_NAME', '')
+          is_tag_release = ref_type == 'tag' and ref_name.startswith('v')
+
+          if is_tag_release:
+              tag_version = ref_name[1:]
+              if tag_version != release_version:
+                  raise SystemExit(
+                      f'Release tag {ref_name} does not match checked-in app version {release_version}'
+                  )
+              release_tag = ref_name
+          else:
+              release_tag = f'v{release_version}'
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'version={release_version}\n')
+              output.write(f'release_tag={release_tag}\n')
+              output.write(f'is_tag_release={str(is_tag_release).lower()}\n')
+          PY
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -63,12 +111,63 @@ jobs:
       - name: Build desktop bundles
         run: npm run tauri:build
 
+      - name: Collect native release assets
+        id: release_files
+        shell: bash
+        env:
+          PLATFORM_ID: ${{ matrix.platform_id }}
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path('src-tauri/target/release/bundle')
+          platform_id = os.environ['PLATFORM_ID']
+          release_version = os.environ['RELEASE_VERSION']
+
+          suffixes_by_platform = {
+              'macos-x64': ['.dmg'],
+              'macos-arm64': ['.dmg'],
+              'windows-x64': ['.msi', '.exe'],
+              'linux-x64': ['.deb', '.rpm', '.AppImage'],
+          }
+
+          suffixes = suffixes_by_platform[platform_id]
+          release_files = []
+          for path in root.rglob('*'):
+              if not path.is_file():
+                  continue
+              if any(str(path).endswith(suffix) for suffix in suffixes):
+                  if release_version not in path.name:
+                      raise SystemExit(
+                          f'Expected version {release_version} in release asset name, got {path.name}'
+                      )
+                  release_files.append(path.as_posix())
+
+          if not release_files:
+              visible = '\n'.join(sorted(p.as_posix() for p in root.rglob('*') if p.is_file()))
+              raise SystemExit(
+                  f'No native release files found for {platform_id}. Visible files:\n{visible}'
+              )
+
+          print('Collected release files:')
+          for file_path in release_files:
+              print(file_path)
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('files<<EOF\n')
+              output.write('\n'.join(release_files))
+              output.write('\nEOF\n')
+          PY
+
       - name: Archive bundle output (Unix)
         if: runner.os != 'Windows'
         id: archive_unix
         shell: bash
         run: |
-          archive_path="$RUNNER_TEMP/$ARCHIVE_BASENAME.tar.gz"
+          archive_path="$RUNNER_TEMP/kafkadesk-${{ steps.release_meta.outputs.version }}-${{ matrix.platform_id }}.tar.gz"
           tar -C src-tauri/target/release -czf "$archive_path" bundle
           echo "archive_path=$archive_path" >> "$GITHUB_OUTPUT"
 
@@ -77,20 +176,25 @@ jobs:
         id: archive_windows
         shell: pwsh
         run: |
-          $archivePath = Join-Path $env:RUNNER_TEMP "$env:ARCHIVE_BASENAME.zip"
+          $archivePath = Join-Path $env:RUNNER_TEMP "kafkadesk-${{ steps.release_meta.outputs.version }}-${{ matrix.platform_id }}.zip"
           Compress-Archive -Path "src-tauri/target/release/bundle" -DestinationPath $archivePath -Force
           "archive_path=$archivePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARCHIVE_BASENAME }}
+          name: kafkadesk-${{ steps.release_meta.outputs.version }}-${{ matrix.platform_id }}
           path: ${{ steps.archive_unix.outputs.archive_path || steps.archive_windows.outputs.archive_path }}
           if-no-files-found: error
 
-      - name: Attach bundle archive to GitHub Release
-        if: github.event_name == 'release'
+      - name: Publish native release assets
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.archive_unix.outputs.archive_path || steps.archive_windows.outputs.archive_path }}
+          tag_name: ${{ steps.release_meta.outputs.release_tag }}
+          name: KafkaDesk ${{ steps.release_meta.outputs.release_tag }}
+          generate_release_notes: true
+          prerelease: ${{ contains(steps.release_meta.outputs.release_tag, '-') }}
+          files: ${{ steps.release_files.outputs.files }}
           fail_on_unmatched_files: true
+          overwrite_files: true
