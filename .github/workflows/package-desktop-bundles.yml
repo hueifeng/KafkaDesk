@@ -21,23 +21,53 @@ jobs:
           - label: macOS x64 bundle
             runner: macos-13
             platform_id: macos-x64
+            release_os: macos
+            release_arch: x64
+            release_filename_suffix: .dmg
             bundle_targets: dmg
+            build_args: --bundles dmg
             expected_suffixes: .dmg
+            rust_target: ""
           - label: macOS arm64 bundle
             runner: macos-14
             platform_id: macos-arm64
+            release_os: macos
+            release_arch: arm64
+            release_filename_suffix: .dmg
             bundle_targets: dmg
+            build_args: --bundles dmg
             expected_suffixes: .dmg
+            rust_target: ""
           - label: Windows x64 bundle
             runner: windows-latest
             platform_id: windows-x64
+            release_os: windows
+            release_arch: x64
+            release_filename_suffix: -setup.exe
             bundle_targets: nsis
+            build_args: --bundles nsis
             expected_suffixes: .exe
+            rust_target: ""
+          - label: Windows arm64 bundle
+            runner: windows-latest
+            platform_id: windows-arm64
+            release_os: windows
+            release_arch: arm64
+            release_filename_suffix: -setup.exe
+            bundle_targets: nsis
+            build_args: --bundles nsis --target aarch64-pc-windows-msvc
+            expected_suffixes: .exe
+            rust_target: aarch64-pc-windows-msvc
           - label: Linux x64 bundle
             runner: ubuntu-22.04
             platform_id: linux-x64
+            release_os: linux
+            release_arch: amd64
+            release_filename_suffix: .AppImage
             bundle_targets: appimage
+            build_args: --bundles appimage
             expected_suffixes: .AppImage
+            rust_target: ""
 
     env:
       NODE_VERSION: "22"
@@ -116,8 +146,12 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --include=optional
 
+      - name: Add Rust target
+        if: matrix.rust_target != ''
+        run: rustup target add ${{ matrix.rust_target }}
+
       - name: Build desktop bundles
-        run: npm run tauri:build -- --bundles ${{ matrix.bundle_targets }}
+        run: npm run tauri:build -- ${{ matrix.build_args }}
 
       - name: Collect native release assets
         id: release_files
@@ -126,15 +160,22 @@ jobs:
           PLATFORM_ID: ${{ matrix.platform_id }}
           RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
           EXPECTED_SUFFIXES: ${{ matrix.expected_suffixes }}
+          RELEASE_OS: ${{ matrix.release_os }}
+          RELEASE_ARCH: ${{ matrix.release_arch }}
+          RELEASE_FILENAME_SUFFIX: ${{ matrix.release_filename_suffix }}
         run: |
           python3 - <<'PY'
           import os
+          import shutil
           from pathlib import Path
 
           root = Path('src-tauri/target/release/bundle')
           platform_id = os.environ['PLATFORM_ID']
           release_version = os.environ['RELEASE_VERSION']
           suffixes = [suffix.strip() for suffix in os.environ['EXPECTED_SUFFIXES'].split(',') if suffix.strip()]
+          release_os = os.environ['RELEASE_OS']
+          release_arch = os.environ['RELEASE_ARCH']
+          release_filename_suffix = os.environ['RELEASE_FILENAME_SUFFIX']
           release_files = []
           for path in root.rglob('*'):
               if not path.is_file():
@@ -144,7 +185,10 @@ jobs:
                       raise SystemExit(
                           f'Expected version {release_version} in release asset name, got {path.name}'
                       )
-                  release_files.append(path.as_posix())
+                  renamed_path = path.with_name(f'KafkaDesk-{release_version}-{release_os}-{release_arch}{release_filename_suffix}')
+                  if renamed_path != path:
+                      shutil.copy2(path, renamed_path)
+                  release_files.append(renamed_path.as_posix())
 
           if not release_files:
               visible = '\n'.join(sorted(p.as_posix() for p in root.rglob('*') if p.is_file()))

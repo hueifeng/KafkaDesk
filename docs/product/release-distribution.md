@@ -24,10 +24,16 @@ KafkaDesk builds currently show up on GitHub in two ways:
 Tag driven releases attach the native files produced from `src-tauri/target/release/bundle/`. Depending on platform, that can include:
 
 - macOS `.dmg`
-- Windows `.msi` or `.exe`
-- Linux `.deb`, `.rpm`, or `.AppImage`
+- Windows `.exe`
+- Linux `.AppImage`
 
-The workflow also uploads per platform bundle archives as Actions artifacts.
+Release asset names are rewritten before upload so the GitHub Releases page shows clear OS and architecture labels, for example:
+
+- `KafkaDesk-0.1.0-macos-arm64.dmg`
+- `KafkaDesk-0.1.0-windows-x64-setup.exe`
+- `KafkaDesk-0.1.0-linux-amd64.AppImage`
+
+The workflow also uploads per-platform bundle archives as Actions artifacts.
 
 ## How release publishing works
 
@@ -43,6 +49,7 @@ Current GitHub hosted targets are:
 - macOS x64 on `macos-13`
 - macOS arm64 on `macos-14`
 - Windows x64 on `windows-latest`
+- Windows arm64 on `windows-latest`
 - Linux x64 on `ubuntu-22.04`
 
 Each job uses the same checked-in build entry point:
