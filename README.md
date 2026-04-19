@@ -2,41 +2,29 @@
 
 KafkaDesk is a desktop debugging workbench for Kafka-based event systems.
 
-It gives engineers one local tool for the jobs that usually get split across CLIs, dashboards, browser tools, and ad hoc scripts: inspect topics, diagnose consumer lag, browse and decode messages, trace a business key across topics, and replay events with explicit safety boundaries.
+It gives engineers one local tool for the jobs that usually get split across CLIs, dashboards, browser tools, and ad hoc scripts: inspect topics, diagnose consumer lag, browse and decode messages, trace a business key across topics, and replay events safely.
 
 <img width="3024" height="1762" alt="image" src="https://github.com/user-attachments/assets/0114d811-f714-4be6-924a-201867efc844" />
 
+## Install
 
-## What you can do today
+- Download the latest desktop build from [GitHub Releases](https://github.com/hueifeng/KafkaDesk/releases)
+- For local development or custom builds, use the source workflow below
 
-- configure clusters with staged validation for input, reachability, auth, TLS, and schema registry readiness
-- browse topics and inspect topic detail
-- inspect consumer groups and lag
-- run bounded message queries with decode status and detail views
-- decode payloads through schema registry aware paths
-- replay messages through policy checked, audited flows
-- trace a business key across configured correlation rules
-- save queries, bookmarks, audit history, and local operator preferences
+Release assets are published with explicit OS and architecture names, for example `KafkaDesk-0.1.0-macos-arm64.dmg`.
 
-Current app areas include Overview, Topics, Groups, Messages, Replay, Trace, Saved Queries, Audit, and Settings.
+Release packaging details live in [`docs/product/release-distribution.md`](./docs/product/release-distribution.md).
 
-## Why it is desktop first
+## Features
 
-KafkaDesk is currently shipped as a Tauri desktop app with a React + Vite frontend, a Rust local runtime, and SQLite backed local persistence.
+- Configure Kafka clusters and Schema Registry connections
+- Browse topics, inspect topic detail, and check consumer group lag
+- Query and inspect messages with decode support
+- Replay events through explicit, auditable workflows
+- Trace business keys across correlated topics
+- Save queries, bookmarks, audit history, and local preferences
 
-That fits the environments it targets. Many Kafka systems are reachable from an engineer workstation long before they are suitable for a shared hosted deployment.
-
-## Downloads and releases
-
-Versioned desktop builds are published on GitHub Releases when a pushed tag matches the checked-in app version, for example `v0.1.0`.
-
-- tag driven releases attach native desktop assets from the Tauri bundle output
-- manual `workflow_dispatch` runs still exist, but they publish workflow artifacts rather than a versioned GitHub Release
-- current GitHub produced assets are unsigned, and release sign off is still manual and verification first
-
-For the current release path and caveats, see [`docs/product/release-distribution.md`](./docs/product/release-distribution.md).
-
-## Quick start for local development
+## Development
 
 Prerequisites:
 
@@ -69,23 +57,14 @@ Helper script:
 ./scripts/start.sh
 ```
 
-## Verification and safety
-
-KafkaDesk favors truthful runtime behavior over optimistic success states.
-
-- cluster validation reports staged readiness instead of a flat pass or fail
-- secured Kafka paths reuse the same auth and TLS runtime wiring across validation, browsing, queries, trace, and replay
-- schema registry validation checks endpoint reachability and credential readiness before reporting success
-- replay stays an explicit, policy constrained workflow rather than a casual write action
-
-Useful verification commands:
+Verification commands:
 
 - `npm run smoke` for a fast local sanity pass
 - `npm run check:frontend` for frontend lint, typecheck, tests, and production build
 - `npm run check:rust` for Rust check and tests
 - `npm run check` for the main repository baseline
 
-For security and operator caveats, read [`SECURITY.md`](./SECURITY.md).
+For runtime caveats and security expectations, read [`SECURITY.md`](./SECURITY.md).
 
 ## Documentation
 
@@ -99,4 +78,4 @@ Older planning material is still available under [`docs/archive/`](./docs/archiv
 
 ## Contributing
 
-KafkaDesk is MIT licensed. If you want to help, start with [`CONTRIBUTING.md`](./CONTRIBUTING.md), keep changes narrow and verified, and update docs whenever runtime behavior or safety expectations change.
+KafkaDesk is MIT licensed. If you want to contribute, start with [`CONTRIBUTING.md`](./CONTRIBUTING.md).
