@@ -116,12 +116,6 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci --include=optional
 
-      - name: Ensure Rollup native package is present
-        shell: bash
-        run: |
-          rollup_pkg="$(node -p "const map = { 'darwin-arm64': '@rollup/rollup-darwin-arm64', 'darwin-x64': '@rollup/rollup-darwin-x64', 'linux-x64': '@rollup/rollup-linux-x64-gnu', 'win32-x64': '@rollup/rollup-win32-x64-msvc' }; const key = `${process.platform}-${process.arch}`; if (!map[key]) { throw new Error(`Unsupported platform for Rollup native package install: ${key}`); } map[key];")"
-          npm install --no-save "$rollup_pkg"
-
       - name: Build desktop bundles
         run: npm run tauri:build -- --bundles ${{ matrix.bundle_targets }}
 
