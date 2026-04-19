@@ -138,7 +138,7 @@ KafkaDesk is now published with a top-level MIT `LICENSE` and is structured to b
 
 - the repository is now license-cleared for reuse and redistribution under the terms in [`LICENSE`](./LICENSE)
 - contributor, security, and release-process documentation already exist and can be used for local evaluation and engineering work
-- GitHub now builds unsigned multi-platform desktop bundle archives for manual runs and published releases, but release verification/sign-off is still manual and verification-first
+- GitHub now builds unsigned multi-platform desktop packages from pushed version tags and attaches the native platform assets to the matching Release, but release verification/sign-off is still manual and verification-first
 - signing, notarization, provenance, and fully automated public release management are not fully productized yet
 - the current release/distribution posture is documented in [`docs/product/release-distribution.md`](./docs/product/release-distribution.md)
 
@@ -147,6 +147,8 @@ KafkaDesk is now published with a top-level MIT `LICENSE` and is structured to b
 The biggest remaining external-release gaps are release operations rather than core workflows:
 
 - distribution automation now covers unsigned GitHub-hosted packaging artifacts, but it is still not a fully automated signed release train
+
+To publish a versioned GitHub Release, push a tag that matches the checked-in app version, for example `v0.1.0`.
 
 ## Contributing
 

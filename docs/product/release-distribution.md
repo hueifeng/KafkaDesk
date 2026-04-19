@@ -21,7 +21,7 @@ The repository now includes a packaging workflow at `.github/workflows/package-d
 It runs in two modes:
 
 - `workflow_dispatch` for manual packaging runs
-- `release.published` for packaging runs tied to a published GitHub Release
+- `push` on version tags such as `v0.1.0` to create/update a GitHub Release with versioned desktop assets
 
 The workflow currently builds and archives unsigned bundle output for these GitHub-hosted targets:
 
@@ -43,9 +43,17 @@ That means GitHub packaging follows the same checked-in Tauri build path as loca
 GitHub packaging output is currently exposed in two truthful ways:
 
 - manual workflow runs upload one downloadable archive per target platform as a GitHub Actions artifact
-- published release runs upload the same per-platform archives as workflow artifacts and also attach them to the matching GitHub Release
+- version-tag runs attach native desktop package files to the matching GitHub Release and also upload per-platform bundle archives as workflow artifacts
 
-Each archive contains the platform's generated `src-tauri/target/release/bundle/` output. Exact installer/package file types remain operating-system-specific.
+Release assets are uploaded from `src-tauri/target/release/bundle/`, so the files shown on the Release page are the actual platform packages produced by Tauri. Exact installer/package file types remain operating-system-specific.
+
+Current examples include outputs such as:
+
+- macOS: `.dmg`
+- Windows: `.msi` and/or `.exe`
+- Linux: `.deb`, `.rpm`, or `.AppImage`
+
+The workflow fails fast if a pushed version tag does not match the checked-in application version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 
 ## Prerequisites
 
@@ -100,7 +108,7 @@ Platform-specific bundle artifacts are typically placed under a bundle subdirect
 
 Exact artifact types depend on the operating system and local Tauri toolchain support.
 
-For GitHub-hosted packaging runs, the uploaded archive names include the target platform plus either the published release tag or the commit SHA used for the manual run.
+For GitHub-hosted packaging runs, workflow artifact archive names include the checked-in version plus the target platform. GitHub Release assets keep the native Tauri-generated filenames, which are expected to include the same application version.
 
 ## Pre-Distribution Checklist
 
