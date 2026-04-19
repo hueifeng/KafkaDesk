@@ -4,6 +4,9 @@ KafkaDesk is a desktop debugging workbench for Kafka-based event systems.
 
 It gives engineers one local tool for the jobs that usually get split across CLIs, dashboards, browser tools, and ad hoc scripts: inspect topics, diagnose consumer lag, browse and decode messages, trace a business key across topics, and replay events with explicit safety boundaries.
 
+<img width="3024" height="1762" alt="image" src="https://github.com/user-attachments/assets/0114d811-f714-4be6-924a-201867efc844" />
+
+
 ## What you can do today
 
 - configure clusters with staged validation for input, reachability, auth, TLS, and schema registry readiness
