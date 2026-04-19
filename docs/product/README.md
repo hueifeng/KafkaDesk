@@ -1,21 +1,13 @@
 # KafkaDesk Product Docs
 
-This section holds the current product-facing documents that live under `docs/`.
+This section collects the active product-facing docs under `docs/`.
 
-## Read This Section For
+## Index
 
-- current release and distribution posture
-- accepted product hardening decisions that affect operator trust
-- documentation that describes what the repository supports today, without falling back to early planning language
+- [`../../README.md`](../../README.md) for the main product overview and local setup
+- [`release-distribution.md`](./release-distribution.md) for release, download, and packaging behavior
+- [`../decisions/adr-2026-04-sprint-1-validation-hardening.md`](../decisions/adr-2026-04-sprint-1-validation-hardening.md) for the validation hardening decision record
+- [`../../SECURITY.md`](../../SECURITY.md) for runtime caveats and security reporting
+- [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) for contributor workflow and verification expectations
 
-## Documents
-
-- [`../../README.md`](../../README.md) — top-level product overview, quick start, runtime posture, and limitations
-- [`../../CONTRIBUTING.md`](../../CONTRIBUTING.md) — contributor workflow and verification expectations
-- [`../../SECURITY.md`](../../SECURITY.md) — security reporting and runtime caveats
-- [`release-distribution.md`](./release-distribution.md) — current release build and distribution process
-- [`../decisions/adr-2026-04-sprint-1-validation-hardening.md`](../decisions/adr-2026-04-sprint-1-validation-hardening.md) — accepted hardening decision record
-
-## Scope Note
-
-If a document reads like early planning, backlog grooming, or pre-implementation scoping, it belongs under [`../archive/`](../archive/README.md), not here.
+Older planning material lives under [`../archive/`](../archive/README.md).

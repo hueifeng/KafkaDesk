@@ -1,47 +1,28 @@
 # KafkaDesk Documentation
 
-This directory is organized to separate current product documentation from reference material and archived planning history.
+Use this directory to go deeper than the root [`README.md`](../README.md).
 
-## Start Here
+## Start here
 
-If you are new to the repository, read in this order:
+1. [`../README.md`](../README.md) for the product overview, local setup, and current release path
+2. [`product/README.md`](./product/README.md) for the active product docs in this directory
+3. [`../CONTRIBUTING.md`](../CONTRIBUTING.md) if you plan to build or contribute
+4. [`../SECURITY.md`](../SECURITY.md) for vulnerability reporting and runtime caveats
 
-1. [`../README.md`](../README.md) — product overview, quick start, current workflows, and release posture
-2. [`../CONTRIBUTING.md`](../CONTRIBUTING.md) — contributor workflow, local environment, and verification lanes
-3. [`../SECURITY.md`](../SECURITY.md) — vulnerability reporting and runtime caveats
-4. [`product/README.md`](./product/README.md) — current product docs collected under `docs/`
+## Product docs
 
-## Current Product Docs
+- [`product/README.md`](./product/README.md) for the current product docs index
+- [`product/release-distribution.md`](./product/release-distribution.md) for release, download, and packaging behavior
+- [`decisions/adr-2026-04-sprint-1-validation-hardening.md`](./decisions/adr-2026-04-sprint-1-validation-hardening.md) for the accepted validation hardening decision
 
-- [`product/README.md`](./product/README.md) — index for current product-facing docs in this directory
-- [`product/release-distribution.md`](./product/release-distribution.md) — current release and distribution posture
-- [`decisions/adr-2026-04-sprint-1-validation-hardening.md`](./decisions/adr-2026-04-sprint-1-validation-hardening.md) — accepted hardening decision record
+## Technical reference
 
-## Technical Reference
+- [`reference/README.md`](./reference/README.md) for the reference docs index
+- [`reference/kafkadesk-desktop-architecture.md`](./reference/kafkadesk-desktop-architecture.md)
+- [`reference/kafkadesk-tech-stack.md`](./reference/kafkadesk-tech-stack.md)
+- [`reference/kafkadesk-data-model.md`](./reference/kafkadesk-data-model.md)
+- [`reference/kafkadesk-api-contracts.md`](./reference/kafkadesk-api-contracts.md)
 
-- [`reference/README.md`](./reference/README.md) — index for architecture, contract, and UX reference material
-- [`reference/kafkadesk-desktop-architecture.md`](./reference/kafkadesk-desktop-architecture.md) — desktop/runtime architecture notes
-- [`reference/kafkadesk-tech-stack.md`](./reference/kafkadesk-tech-stack.md) — stack decisions
-- [`reference/kafkadesk-data-model.md`](./reference/kafkadesk-data-model.md) — local data model and persistence rules
-- [`reference/kafkadesk-api-contracts.md`](./reference/kafkadesk-api-contracts.md) — runtime contract reference
+## Archive
 
-## Archived Planning History
-
-These files are preserved for project history and decision traceability. They are not the current product status page.
-
-- [`archive/README.md`](./archive/README.md) — archive index and usage guidance
-- [`archive/planning/traceforge-mvp-plan.md`](./archive/planning/traceforge-mvp-plan.md)
-- [`archive/planning/traceforge-implementation-plan.md`](./archive/planning/traceforge-implementation-plan.md)
-- [`archive/planning/traceforge-backlog.md`](./archive/planning/traceforge-backlog.md)
-
-Archived design and UX material also lives under [`archive/reference/`](./archive/reference/README.md).
-
-## Current Source of Truth
-
-For current implementation and maturity status, use:
-
-- the code in `src/` and `src-tauri/`
-- [`../README.md`](../README.md)
-- [`product/README.md`](./product/README.md)
-
-For historical planning context, use the archive section instead of internal working files.
+Historical planning and earlier design material lives under [`archive/`](./archive/README.md). Keep using the root README and the product docs above for current behavior.

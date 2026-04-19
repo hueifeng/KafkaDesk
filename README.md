@@ -2,164 +2,98 @@
 
 KafkaDesk is a desktop debugging workbench for Kafka-based event systems.
 
-It is built for engineers who need one local tool to inspect topics, diagnose lag, browse and decode messages, trace a business key across topics, and replay events with explicit safety boundaries.
+It gives engineers one local tool for the jobs that usually get split across CLIs, dashboards, browser tools, and ad hoc scripts: inspect topics, diagnose consumer lag, browse and decode messages, trace a business key across topics, and replay events with explicit safety boundaries.
 
-## Who It Is For
+## What you can do today
 
-KafkaDesk is aimed at engineers who regularly need to:
+- configure clusters with staged validation for input, reachability, auth, TLS, and schema registry readiness
+- browse topics and inspect topic detail
+- inspect consumer groups and lag
+- run bounded message queries with decode status and detail views
+- decode payloads through schema registry aware paths
+- replay messages through policy checked, audited flows
+- trace a business key across configured correlation rules
+- save queries, bookmarks, audit history, and local operator preferences
 
-- inspect live topic traffic without switching between multiple tools
-- understand consumer lag and unhealthy group state quickly
-- read payloads after decode, not just as opaque bytes
-- replay messages deliberately with visible safety boundaries
-- follow one business event across related topics and services
+Current app areas include Overview, Topics, Groups, Messages, Replay, Trace, Saved Queries, Audit, and Settings.
 
-## Quick Start
+## Why it is desktop first
 
-### Prerequisites
+KafkaDesk is currently shipped as a Tauri desktop app with a React + Vite frontend, a Rust local runtime, and SQLite backed local persistence.
 
-Before running KafkaDesk locally, make sure the machine has:
+That fits the environments it targets. Many Kafka systems are reachable from an engineer workstation long before they are suitable for a shared hosted deployment.
+
+## Downloads and releases
+
+Versioned desktop builds are published on GitHub Releases when a pushed tag matches the checked-in app version, for example `v0.1.0`.
+
+- tag driven releases attach native desktop assets from the Tauri bundle output
+- manual `workflow_dispatch` runs still exist, but they publish workflow artifacts rather than a versioned GitHub Release
+- current GitHub produced assets are unsigned, and release sign off is still manual and verification first
+
+For the current release path and caveats, see [`docs/product/release-distribution.md`](./docs/product/release-distribution.md).
+
+## Quick start for local development
+
+Prerequisites:
 
 - Node.js 22
 - npm 10+
 - Rust stable toolchain
-- Tauri platform prerequisites for the host OS
+- Tauri platform prerequisites for your OS
 
-### Install Dependencies
+Install dependencies:
 
 ```bash
 npm ci
 ```
 
-### Run in Frontend Dev Mode
+Run the frontend:
 
 ```bash
 npm run dev
 ```
 
-### Run the Desktop App During Development
+Run the desktop app:
 
 ```bash
 npm run tauri:dev
 ```
 
-You can also use the helper script:
+Helper script:
 
 ```bash
 ./scripts/start.sh
 ```
 
-## What KafkaDesk Does Today
-
-The current desktop app includes these primary workflows:
-
-- cluster configuration with staged validation for input, reachability, auth, and TLS readiness
-- topic browsing and topic detail inspection
-- consumer group inspection and lag diagnosis
-- bounded message queries with detail views and decode status reporting
-- schema-registry-aware payload decode paths
-- controlled replay with policy checks and audit recording
-- trace-by-key style investigation across configured correlation rules
-- saved queries, bookmarks, audit history, and local operator preferences
-
-The app surface currently includes Overview, Topics, Groups, Messages, Replay, Trace, Saved Queries, Audit, and Settings.
-
-## Why KafkaDesk
-
-Kafka debugging often gets split across CLIs, browser tools, dashboards, tracing systems, and ad-hoc scripts.
-
-KafkaDesk is meant to reduce that context switching by keeping the most common operational paths in one local workbench:
-
-- cluster state and validation
-- topic and group inspection
-- bounded message analysis
-- decode-aware message detail
-- replay with policy guardrails
-- trace-oriented investigation
-
-## Product Shape
-
-KafkaDesk is currently implemented as:
-
-- a Tauri desktop shell
-- a React + Vite frontend
-- a Rust local runtime
-- a SQLite-backed local persistence layer
-
-This product shape is deliberate: many Kafka environments are reachable from an engineer workstation long before they are suitable for central hosted deployment.
-
-## Verification
-
-Use these commands during development:
-
-- `npm run smoke`
-- `npm run check:frontend`
-- `npm run check:rust`
-- `npm exec vitest -- --config vitest.config.ts --watch`
-- `npm run test:frontend:coverage`
-- `npm run check`
-
-Verification lanes:
-
-- `npm run smoke` runs the fastest local sanity pass for lint, TypeScript, and frontend tests
-- `npm run check:frontend` runs frontend lint, typecheck, tests, and a production Vite build
-- `npm run check:rust` runs `cargo check` and Rust tests
-- `npm run check` is the main repository baseline
-
-## Runtime Guarantees and Safety Posture
+## Verification and safety
 
 KafkaDesk favors truthful runtime behavior over optimistic success states.
 
-- cluster validation reports staged readiness instead of a flat pass/fail
-- secured Kafka paths reuse the same auth/TLS runtime wiring across validation, browsing, queries, trace, and replay
+- cluster validation reports staged readiness instead of a flat pass or fail
+- secured Kafka paths reuse the same auth and TLS runtime wiring across validation, browsing, queries, trace, and replay
 - schema registry validation checks endpoint reachability and credential readiness before reporting success
-- replay remains an explicit, policy-constrained workflow rather than a casual write action
+- replay stays an explicit, policy constrained workflow rather than a casual write action
 
-For security and operator-safety details, read [`SECURITY.md`](./SECURITY.md).
+Useful verification commands:
 
-## Documentation Map
+- `npm run smoke` for a fast local sanity pass
+- `npm run check:frontend` for frontend lint, typecheck, tests, and production build
+- `npm run check:rust` for Rust check and tests
+- `npm run check` for the main repository baseline
 
-Start with the documentation index, then choose the section that matches what you need:
+For security and operator caveats, read [`SECURITY.md`](./SECURITY.md).
 
-- [`docs/README.md`](./docs/README.md) — main documentation entry point and reading order
-- [`docs/product/README.md`](./docs/product/README.md) — current product-facing repository docs
-- [`docs/reference/README.md`](./docs/reference/README.md) — technical and design reference material
-- [`docs/archive/README.md`](./docs/archive/README.md) — archived planning and project-history material
+## Documentation
 
-Core repository docs:
+- [`docs/README.md`](./docs/README.md) for the main docs landing page
+- [`docs/product/README.md`](./docs/product/README.md) for current product docs under `docs/`
+- [`docs/reference/README.md`](./docs/reference/README.md) for architecture and technical reference material
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) for setup and contribution workflow
+- [`SECURITY.md`](./SECURITY.md) for vulnerability reporting and runtime caveats
 
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — setup, verification, and contribution workflow
-- [`SECURITY.md`](./SECURITY.md) — vulnerability reporting and runtime caveats
-- [`docs/product/release-distribution.md`](./docs/product/release-distribution.md) — how release artifacts are currently built and what is still manual
-
-## Release and Open-Source Status
-
-KafkaDesk is now published with a top-level MIT `LICENSE` and is structured to be shared as a public source repository.
-
-- the repository is now license-cleared for reuse and redistribution under the terms in [`LICENSE`](./LICENSE)
-- contributor, security, and release-process documentation already exist and can be used for local evaluation and engineering work
-- GitHub now builds unsigned multi-platform desktop packages from pushed version tags and attaches the native platform assets to the matching Release, but release verification/sign-off is still manual and verification-first
-- signing, notarization, provenance, and fully automated public release management are not fully productized yet
-- the current release/distribution posture is documented in [`docs/product/release-distribution.md`](./docs/product/release-distribution.md)
-
-## Current Limitations
-
-The biggest remaining external-release gaps are release operations rather than core workflows:
-
-- distribution automation now covers unsigned GitHub-hosted packaging artifacts, but it is still not a fully automated signed release train
-
-To publish a versioned GitHub Release, push a tag that matches the checked-in app version, for example `v0.1.0`.
+Older planning material is still available under [`docs/archive/`](./docs/archive/README.md), but it is not the current product status.
 
 ## Contributing
 
-If you want to help harden the product:
-
-- read [`CONTRIBUTING.md`](./CONTRIBUTING.md)
-- keep changes narrow and verified
-- update docs whenever runtime behavior, safety expectations, or verification steps change
-
-## Documentation Notes
-
-The active product narrative now lives in this README, the root contribution and security docs, and the current-doc sections under `docs/`.
-
-Older planning material is still kept in the repository for traceability, but it has been moved under [`docs/archive/`](./docs/archive/README.md) so it does not read like the current product status.
+KafkaDesk is MIT licensed. If you want to help, start with [`CONTRIBUTING.md`](./CONTRIBUTING.md), keep changes narrow and verified, and update docs whenever runtime behavior or safety expectations change.

@@ -1,132 +1,92 @@
 # KafkaDesk Release & Distribution Guide
 
-This document describes the current truth for producing desktop build artifacts from the repository.
+This is the current public release path for KafkaDesk.
 
-KafkaDesk is still pre-1.0. The current release posture is still **manual and verification-first** for release sign-off, but the repository now includes a first GitHub Actions packaging batch for unsigned desktop bundles.
+KafkaDesk is still pre 1.0. Desktop packaging is automated, but release sign off is still manual and verification first.
 
-## What Gets Distributed
+## What ships
 
 KafkaDesk is a Tauri desktop application.
 
-- frontend assets are built with Vite into `dist/`
+- frontend assets are built into `dist/`
 - the desktop runtime is built from `src-tauri/`
-- distributable desktop bundles are produced by `tauri build`
+- desktop bundles are produced by `npm run tauri:build`
 
-This repository is **not** currently set up for npm package publishing.
+This repository does not publish an npm package.
 
-## GitHub Packaging Workflow
+## Where to download builds
 
-The repository now includes a packaging workflow at `.github/workflows/package-desktop-bundles.yml`.
+KafkaDesk builds currently show up on GitHub in two ways:
+
+- **GitHub Releases** for pushed version tags such as `v0.1.0`
+- **GitHub Actions artifacts** for manual `workflow_dispatch` packaging runs
+
+Tag driven releases attach the native files produced from `src-tauri/target/release/bundle/`. Depending on platform, that can include:
+
+- macOS `.dmg`
+- Windows `.msi` or `.exe`
+- Linux `.deb`, `.rpm`, or `.AppImage`
+
+The workflow also uploads per platform bundle archives as Actions artifacts.
+
+## How release publishing works
+
+The workflow lives at `.github/workflows/package-desktop-bundles.yml`.
 
 It runs in two modes:
 
-- `workflow_dispatch` for manual packaging runs
-- `push` on version tags such as `v0.1.0` to create/update a GitHub Release with versioned desktop assets
+- `workflow_dispatch` packages builds and uploads downloadable workflow artifacts
+- `push` on tags matching `v*` packages builds, uploads workflow artifacts, and creates or updates the matching GitHub Release
 
-The workflow currently builds and archives unsigned bundle output for these GitHub-hosted targets:
+Current GitHub hosted targets are:
 
 - macOS x64 on `macos-13`
 - macOS arm64 on `macos-14`
 - Windows x64 on `windows-latest`
 - Linux x64 on `ubuntu-22.04`
 
-Each matrix job uses the existing repository entry point:
+Each job uses the same checked-in build entry point:
 
 ```bash
 npm run tauri:build
 ```
 
-That means GitHub packaging follows the same checked-in Tauri build path as local release builds.
+## Version alignment contract
 
-## GitHub Download Paths
+Versioned releases only work when the version matches in all three checked-in files:
 
-GitHub packaging output is currently exposed in two truthful ways:
+- `package.json`
+- `src-tauri/Cargo.toml`
+- `src-tauri/tauri.conf.json`
 
-- manual workflow runs upload one downloadable archive per target platform as a GitHub Actions artifact
-- version-tag runs attach native desktop package files to the matching GitHub Release and also upload per-platform bundle archives as workflow artifacts
+For tag driven releases, the pushed tag must match that version exactly, for example `v0.1.0` for app version `0.1.0`. The workflow fails fast on any mismatch.
 
-Release assets are uploaded from `src-tauri/target/release/bundle/`, so the files shown on the Release page are the actual platform packages produced by Tauri. Exact installer/package file types remain operating-system-specific.
+Release asset filenames are also expected to include the same app version.
 
-Current examples include outputs such as:
+## Local release build
 
-- macOS: `.dmg`
-- Windows: `.msi` and/or `.exe`
-- Linux: `.deb`, `.rpm`, or `.AppImage`
-
-The workflow fails fast if a pushed version tag does not match the checked-in application version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
-
-## Prerequisites
-
-Before attempting a local release build, ensure the release machine has:
+Before building locally, make sure the machine has:
 
 - Node.js 22
 - npm 10+
 - Rust stable toolchain
 - Tauri platform prerequisites for the target OS
-- any platform-specific signing/notarization prerequisites if you plan to distribute outside local/internal testing
 
-For the GitHub packaging workflow, GitHub-hosted runners supply the build machine and the workflow installs the Linux-side packaging dependencies it needs for the current x64 Linux lane.
-
-## Release Verification Baseline
-
-From the repository root, run the full verification baseline first:
+From the repository root:
 
 ```bash
 npm ci
 npm run check
-```
-
-Do not cut or distribute a build that has not passed the current baseline.
-
-The packaging workflow itself is focused on bundle creation and upload. It does **not** replace maintainer release review, runtime verification, signing, or notarization.
-
-## Build Release Artifacts
-
-Create desktop bundles from the repository root:
-
-```bash
 npm run tauri:build
 ```
 
-Relevant Tauri configuration currently lives in `src-tauri/tauri.conf.json`.
+Tauri bundle output is generated under `src-tauri/target/release/bundle/`.
 
-That config currently uses:
+## Current caveats
 
-- `beforeBuildCommand: npm run build`
-- `bundle.active: true`
-- `bundle.targets: all`
+- GitHub packaging currently produces unsigned desktop assets
+- maintainer review, runtime verification, and release sign off are still manual
+- no signing or notarization workflow is checked into the repository
+- provenance and a fully automated signed public release pipeline are not in place yet
 
-This local build path is also what the GitHub packaging workflow runs on each target runner.
-
-## Expected Output Locations
-
-Tauri release output is generated under `src-tauri/target/release/`.
-
-Platform-specific bundle artifacts are typically placed under a bundle subdirectory such as:
-
-- `src-tauri/target/release/bundle/`
-
-Exact artifact types depend on the operating system and local Tauri toolchain support.
-
-For GitHub-hosted packaging runs, workflow artifact archive names include the checked-in version plus the target platform. GitHub Release assets keep the native Tauri-generated filenames, which are expected to include the same application version.
-
-## Pre-Distribution Checklist
-
-Before sharing a build, confirm:
-
-- `npm run check` passed on the release input revision
-- any security-sensitive runtime/docs changes are reflected in `README.md`, `CONTRIBUTING.md`, and `SECURITY.md`
-- replay/runtime caveats are still truthful for the build you are distributing
-- the build environment still includes the expected Kafka TLS/OpenSSL support
-- release notes mention any blocked/known limitations that affect operator trust
-
-## Current Gaps / Non-Automated Areas
-
-The following areas are not yet fully productized:
-
-- no documented signing/notarization workflow is checked into the repository
-- GitHub automation only covers unsigned bundle creation plus artifact/release-asset upload; it does not provide a fully automated signed public release pipeline
-- no changelog/release-note generation workflow is automated
-- no distribution provenance/attestation workflow is configured
-
-Until those gaps are addressed, treat builds as manually verified engineering artifacts rather than a fully automated public release train.
+Treat current builds as manually verified engineering artifacts, not as a fully automated signed release train.
