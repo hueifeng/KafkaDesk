@@ -21,15 +21,23 @@ jobs:
           - label: macOS x64 bundle
             runner: macos-13
             platform_id: macos-x64
+            bundle_targets: dmg
+            expected_suffixes: .dmg
           - label: macOS arm64 bundle
             runner: macos-14
             platform_id: macos-arm64
+            bundle_targets: dmg
+            expected_suffixes: .dmg
           - label: Windows x64 bundle
             runner: windows-latest
             platform_id: windows-x64
+            bundle_targets: nsis
+            expected_suffixes: .exe
           - label: Linux x64 bundle
             runner: ubuntu-22.04
             platform_id: linux-x64
+            bundle_targets: appimage
+            expected_suffixes: .AppImage
 
     env:
       NODE_VERSION: "22"
@@ -109,7 +117,7 @@ jobs:
         run: npm ci
 
       - name: Build desktop bundles
-        run: npm run tauri:build
+        run: npm run tauri:build -- --bundles ${{ matrix.bundle_targets }}
 
       - name: Collect native release assets
         id: release_files
@@ -117,24 +125,16 @@ jobs:
         env:
           PLATFORM_ID: ${{ matrix.platform_id }}
           RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          EXPECTED_SUFFIXES: ${{ matrix.expected_suffixes }}
         run: |
           python3 - <<'PY'
           import os
-          import sys
           from pathlib import Path
 
           root = Path('src-tauri/target/release/bundle')
           platform_id = os.environ['PLATFORM_ID']
           release_version = os.environ['RELEASE_VERSION']
-
-          suffixes_by_platform = {
-              'macos-x64': ['.dmg'],
-              'macos-arm64': ['.dmg'],
-              'windows-x64': ['.msi', '.exe'],
-              'linux-x64': ['.deb', '.rpm', '.AppImage'],
-          }
-
-          suffixes = suffixes_by_platform[platform_id]
+          suffixes = [suffix.strip() for suffix in os.environ['EXPECTED_SUFFIXES'].split(',') if suffix.strip()]
           release_files = []
           for path in root.rglob('*'):
               if not path.is_file():
