@@ -11,8 +11,7 @@ use crate::services::connectivity;
 use crate::services::credentials::resolve_kafka_auth;
 use crate::services::credentials::store_runtime_secret;
 use crate::services::kafka_config::{
-    apply_kafka_read_consumer_config_with_secret, normalize_optional_file_path,
-    require_file_path,
+    apply_kafka_read_consumer_config_with_secret, normalize_optional_file_path, require_file_path,
 };
 use chrono::Utc;
 use rdkafka::{
@@ -329,8 +328,7 @@ impl<'a> ClusterService<'a> {
 
         let message = match status {
             ValidationStatusDto::Passed => {
-                "集群校验通过：网络、认证、TLS 与 Kafka 元数据检查均已通过。"
-                    .to_string()
+                "集群校验通过：网络、认证、TLS 与 Kafka 元数据检查均已通过。".to_string()
             }
             ValidationStatusDto::Warning => {
                 "集群校验完成，但仍存在阻塞性缺口或未实现能力。".to_string()
@@ -384,6 +382,7 @@ fn classify_runtime_error(error: &AppError) -> (&'static str, &'static str, bool
         | AppError::Migration(_)
         | AppError::Io(_)
         | AppError::Internal(_) => ("internal_error", "internal.unexpected", false),
+        AppError::Unsupported(_) => ("config_error", "config.unsupported", false),
     }
 }
 
@@ -463,9 +462,8 @@ fn evaluate_tls_stage(request: &ClusterConnectionTestRequest) -> ValidationStage
     let detail = match validate_tls_file_inputs(request) {
         Ok(detail) => detail,
         Err(error) => {
-            return validation_error_stage("tls-configuration", "TLS 能力", error).with_detail(
-                "请修复 CA / 客户端证书 / 私钥文件路径后再重试连接测试。",
-            );
+            return validation_error_stage("tls-configuration", "TLS 能力", error)
+                .with_detail("请修复 CA / 客户端证书 / 私钥文件路径后再重试连接测试。");
         }
     };
 
@@ -485,9 +483,8 @@ fn evaluate_tls_stage(request: &ClusterConnectionTestRequest) -> ValidationStage
                 .with_detail(error.to_string());
             }
 
-            return validation_error_stage("tls-configuration", "TLS 能力", error).with_detail(
-                "运行时无法组装当前 TLS 配置；请先修复本地配置后再重试连接测试。",
-            );
+            return validation_error_stage("tls-configuration", "TLS 能力", error)
+                .with_detail("运行时无法组装当前 TLS 配置；请先修复本地配置后再重试连接测试。");
         }
     }
 
@@ -555,7 +552,9 @@ fn validate_tls_file_inputs(request: &ClusterConnectionTestRequest) -> AppResult
     Ok(details.join(" "))
 }
 
-fn fetch_metadata_capabilities(request: &ClusterConnectionTestRequest) -> AppResult<(usize, String)> {
+fn fetch_metadata_capabilities(
+    request: &ClusterConnectionTestRequest,
+) -> AppResult<(usize, String)> {
     let consumer = build_validation_consumer(request)?;
     let metadata = consumer
         .fetch_metadata(None, Duration::from_secs(5))
@@ -574,11 +573,13 @@ fn fetch_metadata_capabilities(request: &ClusterConnectionTestRequest) -> AppRes
 
 fn probe_consumer_group_capability(request: &ClusterConnectionTestRequest) -> AppResult<usize> {
     let consumer = build_capability_consumer(request, Some("traceforge-validation-group-probe"))?;
-    let groups = consumer.fetch_group_list(None, Duration::from_secs(5)).map_err(|error| {
-        AppError::Network(format!(
-            "failed to load consumer groups during validation: {error}"
-        ))
-    })?;
+    let groups = consumer
+        .fetch_group_list(None, Duration::from_secs(5))
+        .map_err(|error| {
+            AppError::Network(format!(
+                "failed to load consumer groups during validation: {error}"
+            ))
+        })?;
 
     Ok(groups.groups().len())
 }
@@ -872,8 +873,10 @@ mod tests {
         request.auth_credential_ref = Some("cluster-admin".to_string());
         request.auth_secret = Some("alice:secret".to_string());
 
-        let consumer = build_capability_consumer(&request, Some("traceforge-validation-group-probe"))
-            .expect("consumer-group capability client should reuse authenticated runtime config");
+        let consumer =
+            build_capability_consumer(&request, Some("traceforge-validation-group-probe")).expect(
+                "consumer-group capability client should reuse authenticated runtime config",
+            );
         drop(consumer);
     }
 

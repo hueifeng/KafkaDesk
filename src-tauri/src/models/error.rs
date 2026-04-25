@@ -19,6 +19,8 @@ pub enum AppError {
     Path(String),
     #[error("network error: {0}")]
     Network(String),
+    #[error("unsupported capability: {0}")]
+    Unsupported(String),
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -86,6 +88,13 @@ impl From<AppError> for AppErrorDto {
                 message,
                 details: None,
                 retriable: Some(true),
+            },
+            AppError::Unsupported(message) => Self {
+                category: "config_error".to_string(),
+                code: "config.unsupported".to_string(),
+                message,
+                details: None,
+                retriable: Some(false),
             },
             AppError::Internal(message) => Self {
                 category: "internal_error".to_string(),

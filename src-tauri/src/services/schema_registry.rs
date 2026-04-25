@@ -238,6 +238,7 @@ fn classify_registry_error(error: &AppError) -> (&'static str, &'static str, boo
         | AppError::Migration(_)
         | AppError::Io(_)
         | AppError::Internal(_) => ("internal_error", "internal.unexpected", false),
+        AppError::Unsupported(_) => ("config_error", "config.unsupported", false),
     }
 }
 
