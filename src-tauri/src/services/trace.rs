@@ -512,7 +512,11 @@ mod tests {
         path
     }
 
-    fn sample_mtls_profile(cert_path: &PathBuf, key_path: &PathBuf, ca_path: &PathBuf) -> ClusterProfileDto {
+    fn sample_mtls_profile(
+        cert_path: &PathBuf,
+        key_path: &PathBuf,
+        ca_path: &PathBuf,
+    ) -> ClusterProfileDto {
         ClusterProfileDto {
             id: "cluster-1".to_string(),
             name: "Cluster One".to_string(),
