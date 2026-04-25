@@ -20,7 +20,7 @@ const QuickSearch: React.FC<QuickSearchProps> = ({ routes, recentItems }) => {
         placeholder="Search..."
         value={searchValue}
         onChange={(e) => setSearchValue(e.target.value)}
-        className="search-input"
+        className="search-input field-shell"
       />
       <div className="search-results">
         {filteredResults.length > 0 ? (

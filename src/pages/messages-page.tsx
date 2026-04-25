@@ -285,7 +285,7 @@ export function MessagesPage() {
               <div className="toolbar-shell mb-3">
                 <div className="lg:col-span-6">
                   <label className="field-label" htmlFor="messages-topic">主题</label>
-                  <select id="messages-topic" className="field-shell w-full enhanced-select" value={topic} onChange={(event) => setTopic(event.target.value)}>
+                  <select id="messages-topic" className="field-shell w-full" value={topic} onChange={(event) => setTopic(event.target.value)}>
                     <option value="">请选择主题</option>
                     {(topicsQuery.data ?? []).map((item) => (
                       <option key={item.name} value={item.name}>

@@ -19,3 +19,17 @@ type BadgeProps = PropsWithChildren<{
 export function Badge({ tone = 'muted', children }: BadgeProps) {
   return <span className={`badge-shell ${toneClasses[tone]}`}>{children}</span>;
 }
+
+export function renderBadgeForStatus(status: string) {
+  const statusToneMap: Record<string, BadgeTone> = {
+    success: 'success',
+    warning: 'warning',
+    danger: 'danger',
+    info: 'info',
+    trace: 'trace',
+    muted: 'muted',
+  };
+
+  const tone = statusToneMap[status.toLowerCase()] || 'muted';
+  return <Badge tone={tone}>{status}</Badge>;
+}

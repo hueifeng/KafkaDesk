@@ -238,7 +238,7 @@ export function TracePage() {
               <div className="toolbar-shell mb-3">
                 <div className="lg:col-span-3">
                   <label className="field-label" htmlFor="trace-key-type">键类型</label>
-                  <select id="trace-key-type" className="field-shell w-full enhanced-select" value={keyType} onChange={(event) => setKeyType(event.target.value)}>
+                  <select id="trace-key-type" className="field-shell w-full" value={keyType} onChange={(event) => setKeyType(event.target.value)}>
                     {keyTypeOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
