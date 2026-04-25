@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageFrame } from '@/components/layout/page-frame';
@@ -56,6 +56,14 @@ function formatConfigValue(entry: TopicOperationConfigEntry) {
   }
 
   return entry.value;
+}
+
+function normalizeConfigEntryValue(value?: string | null) {
+  return value ?? '';
+}
+
+function normalizeRequestedValueForSubmit(configKey: string, value: string) {
+  return isNumericTopicConfigKey(configKey) ? value.trim() : value;
 }
 
 function describeConfigMetadata(entry: TopicOperationConfigEntry) {
@@ -260,28 +268,6 @@ export function TopicDetailPage() {
     [draft?.configKey, draft?.requestedValue],
   );
 
-  useEffect(() => {
-    if (!draft) {
-      return;
-    }
-
-    const currentEntry = operationsOverviewQuery.data?.configEntries.find((entry) => entry.key === draft.configKey);
-    if (!currentEntry) {
-      return;
-    }
-
-    if (currentEntry.value !== draft.expectedCurrentValue) {
-      setFeedback({
-        tone: 'warning',
-        message: `“${draft.configKey}” 的当前值已发生变化，请重新打开编辑器后再提交。`,
-      });
-    } else {
-      setFeedback((current) =>
-        current?.tone === 'warning' && current.message.includes('请重新打开编辑器后再提交') ? null : current,
-      );
-    }
-  }, [draft, operationsOverviewQuery.data?.configEntries]);
-
   const updateMutation = useMutation<UpdateTopicConfigResponse, AppError, UpdateTopicConfigInput>({
     mutationFn: updateTopicConfig,
     onSuccess: async (result) => {
@@ -320,11 +306,15 @@ export function TopicDetailPage() {
     return operationsOverviewQuery.data?.configEntries.find((entry) => entry.key === draft.configKey) ?? null;
   }, [draft, operationsOverviewQuery.data?.configEntries]);
 
-  const activeDraftHasChanged =
-    Boolean(draft && activeDraftEntry && activeDraftEntry.value !== draft.expectedCurrentValue);
+  const activeDraftHasStaleConflict =
+    Boolean(draft && activeDraftEntry && normalizeConfigEntryValue(activeDraftEntry.value) !== draft.expectedCurrentValue);
+
+  const activeDraftEntryIsEditable = Boolean(activeDraftEntry && isEditableConfigEntry(activeDraftEntry));
 
   const activeDraftHasValueChange = Boolean(
-    draft && draft.requestedValue.trim() !== draft.expectedCurrentValue.trim(),
+    draft &&
+      normalizeRequestedValueForSubmit(draft.configKey, draft.requestedValue) !==
+        normalizeRequestedValueForSubmit(draft.configKey, draft.expectedCurrentValue),
   );
 
   const activeDraftValueInvalid = Boolean(
@@ -343,7 +333,8 @@ export function TopicDetailPage() {
     Boolean(
       draft &&
         activeDraftEntry &&
-        !activeDraftHasChanged &&
+        activeDraftEntryIsEditable &&
+        !activeDraftHasStaleConflict &&
         activeDraftHasValueChange &&
         !activeDraftValueInvalid &&
         draft.riskAcknowledged &&
@@ -352,10 +343,26 @@ export function TopicDetailPage() {
     );
 
   const handleOpenEditor = (entry: TopicOperationConfigEntry) => {
+    if (updateMutation.isPending) {
+      return;
+    }
+
+    if (draft?.configKey === entry.key) {
+      return;
+    }
+
+    if (draft && (activeDraftHasValueChange || activeDraftHasStaleConflict)) {
+      setFeedback({
+        tone: 'warning',
+        message: '当前有未保存或待处理的编辑内容，请先保存、取消，或关闭当前编辑器后再切换到其他配置项。',
+      });
+      return;
+    }
+
     setDraft({
       configKey: entry.key,
-      requestedValue: entry.value ?? '',
-      expectedCurrentValue: entry.value ?? '',
+      requestedValue: normalizeConfigEntryValue(entry.value),
+      expectedCurrentValue: normalizeConfigEntryValue(entry.value),
       riskAcknowledged: false,
     });
     setFeedback(null);
@@ -366,11 +373,15 @@ export function TopicDetailPage() {
       return;
     }
 
+    if (updateMutation.isPending || activeDraftHasStaleConflict || !activeDraftEntryIsEditable) {
+      return;
+    }
+
     updateMutation.mutate({
       clusterProfileId: activeClusterProfileId,
       topicName: decodedTopicName,
       configKey: draft.configKey,
-      requestedValue: draft.requestedValue,
+      requestedValue: normalizeRequestedValueForSubmit(draft.configKey, draft.requestedValue),
       expectedCurrentValue: draft.expectedCurrentValue,
       riskAcknowledged: draft.riskAcknowledged,
     });
@@ -378,7 +389,7 @@ export function TopicDetailPage() {
 
   const handleToggleCleanupPolicy = (value: (typeof CLEANUP_POLICY_OPTIONS)[number], checked: boolean) => {
     setDraft((current) => {
-      if (!current) {
+      if (!current || updateMutation.isPending) {
         return current;
       }
 
@@ -495,7 +506,7 @@ export function TopicDetailPage() {
                 <div>
                   <p className="list-row-title">高级配置</p>
                   <p className="list-row-meta">
-                    {detailQuery.data.config?.map((item) => `${item.key}: ${item.value}`).join(' · ') || '暂无'}
+                    {detailQuery.data.advancedConfig?.map((item) => `${item.key}: ${item.value}`).join(' · ') || '暂无'}
                   </p>
                 </div>
               </div>
@@ -578,7 +589,7 @@ export function TopicDetailPage() {
                         ))}
                       </div>
 
-                      {editableConfigEntries.length ? (
+                      {editableConfigEntries.length || draft || lastApplied ? (
                         <div className="workspace-block mt-4 rounded-2xl border border-line-subtle/60 bg-surface-2/80 p-4 shadow-sm">
                           <div className="flex items-start justify-between gap-3">
                             <div>
@@ -592,6 +603,7 @@ export function TopicDetailPage() {
                                 type="button"
                                 className="button-shell"
                                 data-variant="ghost"
+                                disabled={updateMutation.isPending}
                                 onClick={() => {
                                   setDraft(null);
                                   setFeedback(null);
@@ -602,36 +614,37 @@ export function TopicDetailPage() {
                             ) : null}
                           </div>
 
-                          {draft && selectedConfigEntry ? (
-                            <div className="mt-4 space-y-4">
-                              {lastApplied ? (
-                                <div className="topic-config-applied-card">
-                                  <div className="topic-config-applied-head">
-                                    <div>
-                                      <p className="field-label">最近一次已应用修改</p>
-                                      <p className="topic-config-applied-title font-mono">{lastApplied.configKey}</p>
-                                    </div>
-                                    <Badge tone={lastApplied.warning ? 'warning' : 'success'}>
-                                      {lastApplied.warning ? '已应用但需关注' : '已应用'}
-                                    </Badge>
-                                  </div>
-                                  <div className="topic-config-compare-grid mt-3">
-                                    <div className="topic-config-compare-card" data-tone="current">
-                                      <p className="topic-config-compare-label">应用前</p>
-                                      <p className="topic-config-compare-value font-mono">{lastApplied.previousValue ?? '—'}</p>
-                                    </div>
-                                    <div className="topic-config-compare-divider">→</div>
-                                    <div className="topic-config-compare-card" data-tone="next">
-                                      <p className="topic-config-compare-label">应用后</p>
-                                      <p className="topic-config-compare-value font-mono">{lastApplied.resultingValue ?? '—'}</p>
-                                    </div>
-                                  </div>
-                                  <div className="topic-config-applied-meta mt-3">
-                                    <span>审计引用：{lastApplied.auditRef ?? '暂未写入'}</span>
-                                    {lastApplied.warning ? <span>{lastApplied.warning}</span> : null}
-                                  </div>
+                          {lastApplied ? (
+                            <div className="topic-config-applied-card mt-4">
+                              <div className="topic-config-applied-head">
+                                <div>
+                                  <p className="field-label">最近一次已应用修改</p>
+                                  <p className="topic-config-applied-title font-mono">{lastApplied.configKey}</p>
                                 </div>
-                              ) : null}
+                                <Badge tone={lastApplied.warning ? 'warning' : 'success'}>
+                                  {lastApplied.warning ? '已应用但需关注' : '已应用'}
+                                </Badge>
+                              </div>
+                              <div className="topic-config-compare-grid mt-3">
+                                <div className="topic-config-compare-card" data-tone="current">
+                                  <p className="topic-config-compare-label">应用前</p>
+                                  <p className="topic-config-compare-value font-mono">{lastApplied.previousValue ?? '—'}</p>
+                                </div>
+                                <div className="topic-config-compare-divider">→</div>
+                                <div className="topic-config-compare-card" data-tone="next">
+                                  <p className="topic-config-compare-label">应用后</p>
+                                  <p className="topic-config-compare-value font-mono">{lastApplied.resultingValue ?? '—'}</p>
+                                </div>
+                              </div>
+                              <div className="topic-config-applied-meta mt-3">
+                                <span>审计引用：{lastApplied.auditRef ?? '暂未写入'}</span>
+                                {lastApplied.warning ? <span>{lastApplied.warning}</span> : null}
+                              </div>
+                            </div>
+                          ) : null}
+
+                          {draft && selectedConfigEntry && isEditableConfigEntry(selectedConfigEntry) ? (
+                            <div className="mt-4 space-y-4">
 
                               <div className="list-row">
                                 <div>
@@ -642,7 +655,7 @@ export function TopicDetailPage() {
                                 <Badge tone="signal">{isNumericTopicConfigKey(draft.configKey) ? '数值型' : '文本型'}</Badge>
                               </div>
 
-                              {activeDraftHasChanged ? (
+                              {activeDraftHasStaleConflict ? (
                                 <div className="feedback-banner" data-tone="warning" role="status" aria-live="polite">
                                   当前值已变化，请先关闭编辑器并重新打开，以避免覆盖新的 broker 状态。
                                 </div>
@@ -684,6 +697,7 @@ export function TopicDetailPage() {
                                                 type="checkbox"
                                                 value={option}
                                                 checked={checked}
+                                                disabled={updateMutation.isPending}
                                                 onChange={(event) =>
                                                   handleToggleCleanupPolicy(option, event.target.checked)
                                                 }
@@ -714,6 +728,7 @@ export function TopicDetailPage() {
                                           pattern={isNumericTopicConfigKey(draft.configKey) ? '[0-9]*' : undefined}
                                           aria-invalid={isNumericTopicConfigKey(draft.configKey) && draft.requestedValue.trim().length > 0 && !isDigitsOnly(draft.requestedValue.trim())}
                                           value={draft.requestedValue}
+                                          disabled={updateMutation.isPending}
                                           placeholder={
                                             draft.configKey === 'retention.ms'
                                               ? '例如 604800000'
@@ -723,7 +738,7 @@ export function TopicDetailPage() {
                                           }
                                           onChange={(event) =>
                                             setDraft((current) =>
-                                              current
+                                              current && !updateMutation.isPending
                                                 ? {
                                                     ...current,
                                                     requestedValue: event.target.value,
@@ -782,9 +797,10 @@ export function TopicDetailPage() {
                                   className="button-shell"
                                   data-variant={draft.riskAcknowledged ? 'primary' : 'ghost'}
                                   aria-pressed={draft.riskAcknowledged}
+                                  disabled={updateMutation.isPending}
                                   onClick={() =>
                                     setDraft((current) =>
-                                      current
+                                      current && !updateMutation.isPending
                                         ? {
                                             ...current,
                                             riskAcknowledged: !current.riskAcknowledged,
@@ -802,6 +818,7 @@ export function TopicDetailPage() {
                                   type="button"
                                   className="button-shell"
                                   data-variant="ghost"
+                                  disabled={updateMutation.isPending}
                                   onClick={() => {
                                     setDraft(null);
                                     setFeedback(null);
@@ -813,12 +830,16 @@ export function TopicDetailPage() {
                                   type="button"
                                   className="button-shell"
                                   data-variant="primary"
-                                  disabled={!activeDraftCanSubmit}
+                                  disabled={!activeDraftCanSubmit || updateMutation.isPending}
                                   onClick={handleSaveDraft}
                                 >
                                   {updateMutation.isPending ? '保存中…' : '保存修改'}
                                 </button>
                               </div>
+                            </div>
+                          ) : draft && selectedConfigEntry ? (
+                            <div className="workspace-note mt-3">
+                              当前选中的配置项已不再处于可编辑状态，请关闭编辑器并重新确认 broker 返回的最新能力结果。
                             </div>
                           ) : draft ? (
                             <div className="workspace-note mt-3">

@@ -43,7 +43,7 @@ export type TopicDetailResponse = {
   topic: TopicSummary;
   partitions: TopicPartitionSummary[];
   relatedGroups: TopicRelatedGroupSummary[];
-  config?: TopicConfigEntry[] | null;
+  advancedConfig?: TopicConfigEntry[] | null;
 };
 
 export type TopicOperationConfigEntry = {

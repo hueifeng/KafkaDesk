@@ -5,8 +5,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CLUSTER_NAME, useWorkbenchStore } from '@/app/workbench-store';
 import { getTopicDetail, getTopicOperationsOverview, updateTopicConfig } from '@/features/topics/api';
-import { TopicDetailPage } from '@/pages/topic-detail-page';
 import type { TopicDetailResponse, TopicOperationsOverviewResponse, UpdateTopicConfigResponse } from '@/features/topics/types';
+import { TopicDetailPage } from '@/pages/topic-detail-page';
 
 vi.mock('@/features/topics/api', () => ({
   getTopicDetail: vi.fn(),
@@ -115,6 +115,48 @@ function requireCheckboxByValue(value: string) {
   return checkbox as HTMLInputElement;
 }
 
+function createDeferredPromise<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, resolve, reject };
+}
+
+function buildTopicDetailResponse(): TopicDetailResponse {
+  return {
+    topic: {
+      name: 'orders',
+      partitionCount: 6,
+      replicationFactor: 3,
+      schemaType: 'json',
+      retentionSummary: '7d',
+      activityHint: '活跃',
+      isFavorite: false,
+    },
+    partitions: [],
+    relatedGroups: [],
+    advancedConfig: [{ key: 'brokerBootstrap', value: 'localhost:9092' }],
+  };
+}
+
+function buildConfigEntry(key: string, value: string) {
+  return {
+    key,
+    value,
+    isSupported: true,
+    isReadOnly: false,
+    isDefault: false,
+    isSensitive: false,
+    source: 'dynamic-topic',
+    note: null,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
@@ -148,49 +190,24 @@ afterEach(async () => {
   });
 });
 
-function buildTopicDetailResponse(): TopicDetailResponse {
-  return {
-    topic: {
-      name: 'orders',
-      partitionCount: 6,
-      replicationFactor: 3,
-      schemaType: 'json',
-      retentionSummary: '7d',
-      activityHint: '活跃',
-      isFavorite: false,
-    },
-    partitions: [],
-    relatedGroups: [],
-    config: [],
-  };
-}
-
 describe('TopicDetailPage', () => {
-  it('submits a fixed snapshot and surfaces the write acknowledgement', async () => {
+  it('renders advanced config summary and submits a fixed snapshot with write acknowledgement', async () => {
     const topicDetail = buildTopicDetailResponse();
-    topicDetail.config = [{ key: 'brokerBootstrap', value: 'localhost:9092' }];
+    topicDetail.advancedConfig = [
+      { key: 'brokerBootstrap', value: 'localhost:9092' },
+      { key: 'retention.ms', value: '604800000' },
+    ];
 
     const initialOverview: TopicOperationsOverviewResponse = {
       status: 'passed',
       message: 'ok',
       stages: [],
-      configEntries: [
-        {
-          key: 'retention.ms',
-          value: '604800000',
-          isSupported: true,
-          isReadOnly: false,
-          isDefault: false,
-          isSensitive: false,
-          source: 'dynamic-topic',
-          note: null,
-        },
-      ],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
     };
 
     const updatedOverview: TopicOperationsOverviewResponse = {
       ...initialOverview,
-      configEntries: [{ ...initialOverview.configEntries[0], value: '86400000' }],
+      configEntries: [buildConfigEntry('retention.ms', '86400000')],
     };
 
     const updateResponse: UpdateTopicConfigResponse = {
@@ -215,15 +232,15 @@ describe('TopicDetailPage', () => {
     );
 
     await waitFor(() => {
-      expect(document.body.textContent).toContain('运维能力概览');
-      expect(document.body.textContent).toContain('retention.ms');
+      expect(document.body.textContent).toContain('高级配置');
+      expect(document.body.textContent).toContain('brokerBootstrap: localhost:9092');
+      expect(document.body.textContent).toContain('retention.ms: 604800000');
     });
 
     await click(requireButtonByText('编辑'));
 
     await waitFor(() => {
       expect(requireElement<HTMLInputElement>('#topic-config-requested-value').value).toBe('604800000');
-      expect(document.querySelector('#topic-config-expected-value')).toBeNull();
       expect(document.body.textContent).toContain('编辑时快照：604800000');
     });
 
@@ -232,16 +249,18 @@ describe('TopicDetailPage', () => {
 
     await click(requireButtonByText('未确认'));
     expect(saveButton.disabled).toBe(true);
-    expect(document.body.textContent).toContain('当前新值与编辑时快照一致，暂时没有需要提交的变更。');
 
     await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
-    expect(saveButton.disabled).toBe(false);
+
+    await waitFor(() => {
+      expect(saveButton.disabled).toBe(false);
+    });
 
     await click(saveButton);
 
     await waitFor(() => {
-      expect(mockedUpdateTopicConfig).toHaveBeenCalled();
-      expect(mockedUpdateTopicConfig.mock.calls.at(-1)?.[0]).toEqual({
+      expect(mockedUpdateTopicConfig).toHaveBeenCalledTimes(1);
+      expect(mockedUpdateTopicConfig.mock.calls[0]?.[0]).toEqual({
         clusterProfileId: 'cluster-1',
         topicName: 'orders',
         configKey: 'retention.ms',
@@ -255,19 +274,337 @@ describe('TopicDetailPage', () => {
       expect(document.body.textContent).toContain('已应用 “retention.ms” 的配置修改。');
       expect(document.body.textContent).toContain('结果值：86400000');
       expect(document.body.textContent).toContain('审计引用：audit-42');
+      expect(document.body.textContent).toContain('最近一次已应用修改');
+      expect(document.body.textContent).toContain('应用前');
+      expect(document.body.textContent).toContain('应用后');
     });
   });
 
-  it('submits cleanup.policy through constrained checkbox controls', async () => {
+  it('keeps the recent-applied summary visible even when the refreshed editable set becomes empty', async () => {
     const topicDetail = buildTopicDetailResponse();
     const initialOverview: TopicOperationsOverviewResponse = {
       status: 'passed',
       message: 'ok',
       stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+    const refreshedOverview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
       configEntries: [
         {
-          key: 'cleanup.policy',
-          value: 'compact',
+          ...buildConfigEntry('retention.ms', '86400000'),
+          isReadOnly: true,
+        },
+      ],
+    };
+
+    const updateResponse: UpdateTopicConfigResponse = {
+      topicName: 'orders',
+      configKey: 'retention.ms',
+      previousValue: '604800000',
+      requestedValue: '86400000',
+      resultingValue: '86400000',
+      auditRef: 'audit-empty-editable',
+      warning: null,
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValueOnce(initialOverview).mockResolvedValue(refreshedOverview);
+    mockedUpdateTopicConfig.mockResolvedValue(updateResponse);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    await click(requireButtonByText('编辑'));
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
+    await click(requireButtonByText('保存修改'));
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('最近一次已应用修改');
+      expect(document.body.textContent).toContain('audit-empty-editable');
+      expect(document.body.textContent).toContain('应用前');
+      expect(document.body.textContent).toContain('应用后');
+      expect(document.body.textContent).toContain('选择一个可变更的配置项开始编辑。当前可编辑项：无。');
+    });
+  });
+
+  it('surfaces backend warnings on successful saves in feedback and applied summary', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('max.message.bytes', '1048576')],
+    };
+    const updateResponse: UpdateTopicConfigResponse = {
+      topicName: 'orders',
+      configKey: 'max.message.bytes',
+      previousValue: '1048576',
+      requestedValue: '999999999',
+      resultingValue: '999999999',
+      auditRef: 'audit-warning',
+      warning: 'Kafka 已应用配置，但刷新后的 broker 元数据暂未确认最终值。',
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+    mockedUpdateTopicConfig.mockResolvedValue(updateResponse);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('max.message.bytes');
+    });
+
+    await click(requireButtonByText('编辑'));
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '999999999');
+    await click(requireButtonByText('保存修改'));
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('已应用 “max.message.bytes” 的配置修改。');
+      expect(document.body.textContent).toContain('已应用但需关注');
+      expect(document.body.textContent).toContain('Kafka 已应用配置，但刷新后的 broker 元数据暂未确认最终值。');
+      expect(document.body.textContent).toContain('审计引用：audit-warning');
+      expect(document.body.textContent).toContain('最近一次已应用修改');
+    });
+  });
+
+  it('does not silently replace an unsaved draft when another config edit is requested', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [
+        buildConfigEntry('retention.ms', '604800000'),
+        buildConfigEntry('max.message.bytes', '1048576'),
+      ],
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+      expect(document.body.textContent).toContain('max.message.bytes');
+    });
+
+    const editButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).filter((candidate) =>
+      candidate.textContent?.trim().includes('编辑'),
+    );
+    expect(editButtons.length).toBeGreaterThanOrEqual(2);
+
+    await click(editButtons[0]!);
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
+
+    await click(editButtons[1]!);
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('当前有未保存或待处理的编辑内容');
+      expect(requireElement<HTMLInputElement>('#topic-config-requested-value').value).toBe('86400000');
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    expect(mockedUpdateTopicConfig).not.toHaveBeenCalled();
+  });
+
+  it('cancels a dirty draft without saving and reopens from the current broker value', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    await click(requireButtonByText('编辑'));
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
+    await click(requireButtonByText('取消'));
+
+    await waitFor(() => {
+      expect(document.querySelector('#topic-config-requested-value')).toBeNull();
+    });
+
+    await click(requireButtonByText('编辑'));
+
+    await waitFor(() => {
+      expect(requireElement<HTMLInputElement>('#topic-config-requested-value').value).toBe('604800000');
+      expect(requireButtonByText('未确认')).toBeTruthy();
+      expect(requireButtonByText('保存修改').disabled).toBe(true);
+    });
+
+    expect(mockedUpdateTopicConfig).not.toHaveBeenCalled();
+  });
+
+  it('prevents duplicate submits and locks mutation-sensitive controls while save is pending', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+    const pendingUpdate = createDeferredPromise<UpdateTopicConfigResponse>();
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+    mockedUpdateTopicConfig.mockReturnValue(pendingUpdate.promise);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    await click(requireButtonByText('编辑'));
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
+
+    const saveButton = requireButtonByText('保存修改');
+    await waitFor(() => {
+      expect(saveButton.disabled).toBe(false);
+    });
+
+    await click(saveButton);
+
+    await waitFor(() => {
+      expect(mockedUpdateTopicConfig).toHaveBeenCalledTimes(1);
+      expect(requireButtonByText('保存中…').disabled).toBe(true);
+      expect(requireButtonByText('关闭编辑').disabled).toBe(true);
+      expect(requireButtonByText('已确认').disabled).toBe(true);
+      expect(requireElement<HTMLInputElement>('#topic-config-requested-value').disabled).toBe(true);
+    });
+
+    await click(requireButtonByText('保存中…'));
+    await click(requireButtonByText('已确认'));
+
+    expect(mockedUpdateTopicConfig).toHaveBeenCalledTimes(1);
+    expect(requireElement<HTMLInputElement>('#topic-config-requested-value').value).toBe('86400000');
+
+    pendingUpdate.resolve({
+      topicName: 'orders',
+      configKey: 'retention.ms',
+      previousValue: '604800000',
+      requestedValue: '86400000',
+      resultingValue: '86400000',
+      auditRef: 'audit-pending',
+      warning: null,
+    });
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('已应用 “retention.ms” 的配置修改。');
+    });
+  });
+
+  it('blocks stale drafts after overview data changes until the editor is reopened', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const initialOverview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(initialOverview);
+
+    const { queryClient } = await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    await click(requireButtonByText('编辑'));
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
+
+    await act(async () => {
+      queryClient.setQueryData<TopicOperationsOverviewResponse>(
+        ['topic-operations-overview', 'cluster-1', 'orders'],
+        {
+          ...initialOverview,
+          configEntries: [buildConfigEntry('retention.ms', '777777777')],
+        },
+      );
+    });
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('当前值已变化，请先关闭编辑器并重新打开');
+      expect(requireButtonByText('保存修改').disabled).toBe(true);
+    });
+
+    expect(mockedUpdateTopicConfig).not.toHaveBeenCalled();
+
+    await click(requireButtonByText('关闭编辑'));
+    await click(requireButtonByText('编辑'));
+
+    await waitFor(() => {
+      expect(document.body.textContent).not.toContain('当前值已变化，请先关闭编辑器并重新打开');
+      expect(requireElement<HTMLInputElement>('#topic-config-requested-value').value).toBe('777777777');
+      expect(document.body.textContent).toContain('编辑时快照：777777777');
+    });
+  });
+
+  it('keeps editable entries with empty current values editable instead of treating them as stale', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [
+        {
+          key: 'retention.ms',
+          value: null,
           isSupported: true,
           isReadOnly: false,
           isDefault: false,
@@ -276,6 +613,150 @@ describe('TopicDetailPage', () => {
           note: null,
         },
       ],
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    await click(requireButtonByText('编辑'));
+
+    await waitFor(() => {
+      expect(requireElement<HTMLInputElement>('#topic-config-requested-value').value).toBe('');
+      expect(document.body.textContent).not.toContain('当前值已变化，请先关闭编辑器并重新打开');
+    });
+
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
+
+    await waitFor(() => {
+      expect(requireButtonByText('保存修改').disabled).toBe(false);
+    });
+  });
+
+  it('trims numeric values before submitting them to the backend', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+
+    const updateResponse: UpdateTopicConfigResponse = {
+      topicName: 'orders',
+      configKey: 'retention.ms',
+      previousValue: '604800000',
+      requestedValue: '86400000',
+      resultingValue: '86400000',
+      auditRef: 'audit-trim',
+      warning: null,
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+    mockedUpdateTopicConfig.mockResolvedValue(updateResponse);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    await click(requireButtonByText('编辑'));
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), ' 86400000 ');
+
+    await waitFor(() => {
+      expect(requireButtonByText('保存修改').disabled).toBe(false);
+    });
+
+    await click(requireButtonByText('保存修改'));
+
+    await waitFor(() => {
+      expect(mockedUpdateTopicConfig.mock.calls.at(-1)?.[0]).toEqual({
+        clusterProfileId: 'cluster-1',
+        topicName: 'orders',
+        configKey: 'retention.ms',
+        requestedValue: '86400000',
+        expectedCurrentValue: '604800000',
+        riskAcknowledged: true,
+      });
+    });
+  });
+
+  it('stops allowing submit when an open draft becomes read-only after overview refresh', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const initialOverview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(initialOverview);
+
+    const { queryClient } = await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    await click(requireButtonByText('编辑'));
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
+
+    await act(async () => {
+      queryClient.setQueryData<TopicOperationsOverviewResponse>(
+        ['topic-operations-overview', 'cluster-1', 'orders'],
+        {
+          ...initialOverview,
+          configEntries: [
+            {
+              ...buildConfigEntry('retention.ms', '604800000'),
+              isReadOnly: true,
+            },
+          ],
+        },
+      );
+    });
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('当前选中的配置项已不再处于可编辑状态');
+    });
+
+    expect(mockedUpdateTopicConfig).not.toHaveBeenCalled();
+    expect(document.querySelector('#topic-config-requested-value')).toBeNull();
+  });
+
+  it('submits cleanup.policy through constrained checkbox controls', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('cleanup.policy', 'compact')],
     };
 
     const updateResponse: UpdateTopicConfigResponse = {
@@ -289,7 +770,7 @@ describe('TopicDetailPage', () => {
     };
 
     mockedGetTopicDetail.mockResolvedValue(topicDetail);
-    mockedGetTopicOperationsOverview.mockResolvedValue(initialOverview);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
     mockedUpdateTopicConfig.mockResolvedValue(updateResponse);
 
     await renderWithProviders(
@@ -308,14 +789,12 @@ describe('TopicDetailPage', () => {
     await waitFor(() => {
       expect(requireCheckboxByValue('compact').checked).toBe(true);
       expect(requireCheckboxByValue('delete').checked).toBe(false);
-      expect(document.body.textContent).toContain('准备写入compact');
     });
 
     await click(requireButtonByText('未确认'));
     await click(requireCheckboxByValue('delete'));
 
     await waitFor(() => {
-      expect(requireCheckboxByValue('delete').checked).toBe(true);
       expect(document.body.textContent).toContain('准备写入compact,delete');
     });
 
@@ -339,18 +818,7 @@ describe('TopicDetailPage', () => {
       status: 'passed',
       message: 'ok',
       stages: [],
-      configEntries: [
-        {
-          key: 'max.message.bytes',
-          value: '1048576',
-          isSupported: true,
-          isReadOnly: false,
-          isDefault: false,
-          isSensitive: false,
-          source: 'dynamic-topic',
-          note: null,
-        },
-      ],
+      configEntries: [buildConfigEntry('max.message.bytes', '1048576')],
     };
 
     mockedGetTopicDetail.mockResolvedValue(topicDetail);
@@ -385,18 +853,7 @@ describe('TopicDetailPage', () => {
       status: 'passed',
       message: 'ok',
       stages: [],
-      configEntries: [
-        {
-          key: 'retention.ms',
-          value: '604800000',
-          isSupported: true,
-          isReadOnly: false,
-          isDefault: false,
-          isSensitive: false,
-          source: 'dynamic-topic',
-          note: null,
-        },
-      ],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
     };
 
     mockedGetTopicDetail.mockResolvedValue(topicDetail);
@@ -424,24 +881,52 @@ describe('TopicDetailPage', () => {
     expect(requireButtonByText('保存修改').disabled).toBe(false);
   });
 
+  it('clears numeric advisory warnings when the value returns to a normal valid range', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('retention.ms');
+    });
+
+    await click(requireButtonByText('编辑'));
+    await click(requireButtonByText('未确认'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '1000');
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('这个 retention.ms 值明显偏短或偏长');
+    });
+
+    await changeValue(requireElement<HTMLInputElement>('#topic-config-requested-value'), '86400000');
+
+    await waitFor(() => {
+      expect(document.body.textContent).not.toContain('这个 retention.ms 值明显偏短或偏长');
+      expect(requireButtonByText('保存修改').disabled).toBe(false);
+    });
+  });
+
   it('shows advisory warning for suspicious but valid max.message.bytes values without triggering invalid-number state', async () => {
     const topicDetail = buildTopicDetailResponse();
     const overview: TopicOperationsOverviewResponse = {
       status: 'passed',
       message: 'ok',
       stages: [],
-      configEntries: [
-        {
-          key: 'max.message.bytes',
-          value: '1048576',
-          isSupported: true,
-          isReadOnly: false,
-          isDefault: false,
-          isSensitive: false,
-          source: 'dynamic-topic',
-          note: null,
-        },
-      ],
+      configEntries: [buildConfigEntry('max.message.bytes', '1048576')],
     };
 
     mockedGetTopicDetail.mockResolvedValue(topicDetail);
