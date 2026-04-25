@@ -4884,6 +4884,7 @@ dependencies = [
  "chrono",
  "keyring",
  "rdkafka",
+ "rdkafka-sys",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

@@ -1,8 +1,32 @@
 use crate::models::cluster::ClusterProfileDto;
 use crate::models::error::{AppError, AppResult};
 use crate::services::credentials::{resolve_kafka_auth, ResolvedKafkaAuth};
+use rdkafka::admin::AdminClient;
+use rdkafka::client::DefaultClientContext;
+use rdkafka::config::FromClientConfig;
 use rdkafka::ClientConfig;
 use std::path::Path;
+
+pub fn build_kafka_admin_client(
+    profile: &ClusterProfileDto,
+) -> AppResult<AdminClient<DefaultClientContext>> {
+    let mut config = ClientConfig::new();
+    apply_kafka_admin_client_config(&mut config, profile)?;
+
+    AdminClient::from_config(&config)
+        .map_err(|error| AppError::Network(format!("failed to create Kafka admin client: {error}")))
+}
+
+pub fn apply_kafka_admin_client_config(
+    config: &mut ClientConfig,
+    profile: &ClusterProfileDto,
+) -> AppResult<()> {
+    config
+        .set("bootstrap.servers", &profile.bootstrap_servers)
+        .set("socket.timeout.ms", "5000");
+
+    apply_kafka_security_config(config, profile)
+}
 
 pub fn apply_kafka_read_consumer_config(
     config: &mut ClientConfig,
@@ -154,7 +178,10 @@ fn validate_file_path(path: &str, label: &str) -> AppResult<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_kafka_read_consumer_config, apply_kafka_security_config_with_secret};
+    use super::{
+        apply_kafka_admin_client_config, apply_kafka_read_consumer_config,
+        apply_kafka_security_config_with_secret,
+    };
     use crate::models::cluster::ClusterProfileDto;
     use rdkafka::ClientConfig;
     use std::{fs, path::PathBuf};
@@ -200,6 +227,19 @@ mod tests {
         assert_eq!(config.get("socket.timeout.ms"), Some("5000"));
         assert_eq!(config.get("session.timeout.ms"), Some("6000"));
         assert_eq!(config.get("enable.auto.commit"), Some("false"));
+        assert_eq!(config.get("security.protocol"), None);
+    }
+
+    #[test]
+    fn applies_admin_client_defaults_without_consumer_settings() {
+        let mut config = ClientConfig::new();
+
+        apply_kafka_admin_client_config(&mut config, &sample_profile("none", "system-default"))
+            .expect("plaintext admin config should apply");
+
+        assert_eq!(config.get("bootstrap.servers"), Some("localhost:9092"));
+        assert_eq!(config.get("socket.timeout.ms"), Some("5000"));
+        assert_eq!(config.get("enable.auto.commit"), None);
         assert_eq!(config.get("security.protocol"), None);
     }
 
@@ -251,6 +291,40 @@ mod tests {
         let mut config = ClientConfig::new();
         apply_kafka_security_config_with_secret(&mut config, &profile, None)
             .expect("mTLS config should apply");
+
+        assert_eq!(config.get("security.protocol"), Some("ssl"));
+        assert_eq!(
+            config.get("ssl.ca.location"),
+            profile.tls_ca_cert_path.as_deref()
+        );
+        assert_eq!(
+            config.get("ssl.certificate.location"),
+            profile.tls_client_cert_path.as_deref()
+        );
+        assert_eq!(
+            config.get("ssl.key.location"),
+            profile.tls_client_key_path.as_deref()
+        );
+
+        let _ = fs::remove_file(ca_path);
+        let _ = fs::remove_file(cert_path);
+        let _ = fs::remove_file(key_path);
+    }
+
+    #[test]
+    fn applies_admin_client_mtls_paths_when_files_exist() {
+        let ca_path = create_temp_file("admin-helper-ca", "test-ca");
+        let cert_path = create_temp_file("admin-helper-cert", "test-cert");
+        let key_path = create_temp_file("admin-helper-key", "test-key");
+
+        let mut profile = sample_profile("mtls", "tls-required");
+        profile.tls_ca_cert_path = Some(ca_path.to_string_lossy().into_owned());
+        profile.tls_client_cert_path = Some(cert_path.to_string_lossy().into_owned());
+        profile.tls_client_key_path = Some(key_path.to_string_lossy().into_owned());
+
+        let mut config = ClientConfig::new();
+        apply_kafka_admin_client_config(&mut config, &profile)
+            .expect("admin config should apply for mTLS profile");
 
         assert_eq!(config.get("security.protocol"), Some("ssl"));
         assert_eq!(
