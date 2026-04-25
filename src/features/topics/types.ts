@@ -1,3 +1,5 @@
+import type { ValidationStage, ValidationStageStatus } from '@/lib/tauri';
+
 export type ListTopicsInput = {
   clusterProfileId: string;
   query?: string;
@@ -41,5 +43,44 @@ export type TopicDetailResponse = {
   topic: TopicSummary;
   partitions: TopicPartitionSummary[];
   relatedGroups: TopicRelatedGroupSummary[];
-  advancedConfig?: TopicConfigEntry[] | null;
+  config?: TopicConfigEntry[] | null;
+};
+
+export type TopicOperationConfigEntry = {
+  key: string;
+  value?: string | null;
+  isSupported: boolean;
+  isReadOnly?: boolean;
+  isDefault?: boolean;
+  isSensitive?: boolean;
+  source?: string | null;
+  note?: string | null;
+};
+
+export type TopicOperationsOverviewStatus = ValidationStageStatus;
+
+export type TopicOperationsOverviewResponse = {
+  status: TopicOperationsOverviewStatus;
+  message: string;
+  stages: ValidationStage[];
+  configEntries: TopicOperationConfigEntry[];
+};
+
+export type UpdateTopicConfigInput = {
+  clusterProfileId: string;
+  topicName: string;
+  configKey: string;
+  requestedValue?: string | null;
+  expectedCurrentValue?: string | null;
+  riskAcknowledged: boolean;
+};
+
+export type UpdateTopicConfigResponse = {
+  topicName: string;
+  configKey: string;
+  previousValue?: string | null;
+  requestedValue?: string | null;
+  resultingValue?: string | null;
+  auditRef?: string | null;
+  warning?: string | null;
 };
