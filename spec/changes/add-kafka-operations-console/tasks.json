@@ -1,0 +1,79 @@
+[
+  {
+    "number": 1,
+    "category": "阶段 1：能力建模与兼容性",
+    "task": "定义 Kafka 运维能力的 capability 模型与兼容性策略",
+    "steps": [
+      { "step": "梳理 Topic 配置修改、分区扩容、消费进度重置、限流、流量统计的依赖能力", "completed": true },
+      { "step": "定义按 capability 而非仅按 Kafka 版本号做 gating 的规则", "completed": true },
+      { "step": "定义 unsupported_feature / risky / requires_confirmation 等统一结果模型", "completed": true }
+    ],
+    "passes": true
+  },
+  {
+    "number": 2,
+    "category": "阶段 2：Topic 管理",
+    "task": "实现 Topic 配置查看、修改与分区扩容的安全工作流",
+    "steps": [
+      { "step": "增加 Topic 配置读取接口和可编辑字段白名单", "completed": true },
+      { "step": "增加分区数扩容接口与预检查逻辑", "completed": false },
+      { "step": "加入 preview、确认、审计与失败回显", "completed": true }
+    ],
+    "passes": false
+  },
+  {
+    "number": 3,
+    "category": "阶段 3：消费组管理",
+    "task": "实现消费进度重置功能",
+    "steps": [
+      { "step": "支持 earliest、latest、timestamp、explicit offset 四类 reset 模式", "completed": false },
+      { "step": "增加按 group/topic/partition 的作用范围建模", "completed": false },
+      { "step": "加入 preview、风险确认、审计记录与 capability gating", "completed": false }
+    ],
+    "passes": false
+  },
+  {
+    "number": 4,
+    "category": "阶段 4：标签与视图管理",
+    "task": "为集群、Topic、消费组增加标签与筛选能力",
+    "steps": [
+      { "step": "扩展本地数据模型以保存标签与视图偏好", "completed": false },
+      { "step": "增加标签 CRUD 与列表筛选能力", "completed": false },
+      { "step": "把标签集成到管理页面和审计上下文中", "completed": false }
+    ],
+    "passes": false
+  },
+  {
+    "number": 5,
+    "category": "阶段 5：流量统计",
+    "task": "实现 Topic 生产/消费流量统计与明细视图",
+    "steps": [
+      { "step": "定义统计窗口、采样粒度与展示指标", "completed": false },
+      { "step": "增加 Topic 吞吐、积压、消费速率等查询路径", "completed": false },
+      { "step": "在 UI 中提供概览与明细视图", "completed": false }
+    ],
+    "passes": false
+  },
+  {
+    "number": 6,
+    "category": "阶段 6：限流与配额控制",
+    "task": "实现 Topic 级限流/配额控制的 capability-aware 工作流",
+    "steps": [
+      { "step": "确认 Kafka 平台对 Topic 限流或相关配额控制的支持边界", "completed": false },
+      { "step": "设计 capability-aware UI，只在支持的平台暴露可写操作", "completed": false },
+      { "step": "加入预览、确认、审计与回滚提示", "completed": false }
+    ],
+    "passes": false
+  },
+  {
+    "number": 7,
+    "category": "阶段 7：验证与发布",
+    "task": "补齐测试、兼容性验证与文档",
+    "steps": [
+      { "step": "增加 capability 检测、写操作失败、权限不足、版本不支持等测试", "completed": true },
+      { "step": "补充 README/docs 中的运维能力与风险说明", "completed": false },
+      { "step": "定义分阶段发布策略，先启用最有价值且最稳的功能", "completed": false }
+    ],
+    "passes": false
+  }
+]
