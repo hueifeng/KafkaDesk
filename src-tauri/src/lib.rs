@@ -54,6 +54,8 @@ pub fn run() {
             commands::trace::run_trace_query,
             commands::topics::list_topics,
             commands::topics::get_topic_detail,
+            commands::topics::get_topic_operations_overview,
+            commands::topics::update_topic_config,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run KafkaDesk")

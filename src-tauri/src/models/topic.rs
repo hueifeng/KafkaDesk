@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::models::validation::{ValidationStageDto, ValidationStatusDto};
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ListTopicsRequest {
@@ -19,6 +21,13 @@ pub struct ListTopicsRequest {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GetTopicDetailRequest {
+    pub cluster_profile_id: String,
+    pub topic_name: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GetTopicOperationsOverviewRequest {
     pub cluster_profile_id: String,
     pub topic_name: String,
 }
@@ -72,10 +81,68 @@ pub struct TopicConfigEntryDto {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct TopicOperationConfigEntryDto {
+    pub key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    pub is_supported: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_read_only: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_default: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub is_sensitive: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct TopicDetailResponseDto {
     pub topic: TopicSummaryDto,
     pub partitions: Vec<TopicPartitionDto>,
     pub related_groups: Vec<TopicRelatedGroupDto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub advanced_config: Option<Vec<TopicConfigEntryDto>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TopicOperationsOverviewResponseDto {
+    pub status: ValidationStatusDto,
+    pub message: String,
+    pub stages: Vec<ValidationStageDto>,
+    pub config_entries: Vec<TopicOperationConfigEntryDto>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTopicConfigRequest {
+    pub cluster_profile_id: String,
+    pub topic_name: String,
+    pub config_key: String,
+    #[serde(default)]
+    pub requested_value: Option<String>,
+    #[serde(default)]
+    pub expected_current_value: Option<String>,
+    pub risk_acknowledged: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTopicConfigResponseDto {
+    pub topic_name: String,
+    pub config_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub previous_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requested_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resulting_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
 }

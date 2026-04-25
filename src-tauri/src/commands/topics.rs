@@ -1,7 +1,9 @@
 use crate::app::state::AppState;
 use crate::models::error::{AppErrorDto, AppResult};
 use crate::models::topic::{
-    GetTopicDetailRequest, ListTopicsRequest, TopicDetailResponseDto, TopicSummaryDto,
+    GetTopicDetailRequest, GetTopicOperationsOverviewRequest, ListTopicsRequest,
+    TopicDetailResponseDto, TopicOperationsOverviewResponseDto, TopicSummaryDto,
+    UpdateTopicConfigRequest, UpdateTopicConfigResponseDto,
 };
 use crate::services::topics::TopicService;
 use tauri::State;
@@ -24,6 +26,30 @@ pub async fn get_topic_detail(
 ) -> Result<TopicDetailResponseDto, AppErrorDto> {
     let result: AppResult<TopicDetailResponseDto> = TopicService::new(state.pool())
         .get_topic_detail(request)
+        .await;
+
+    result.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn get_topic_operations_overview(
+    state: State<'_, AppState>,
+    request: GetTopicOperationsOverviewRequest,
+) -> Result<TopicOperationsOverviewResponseDto, AppErrorDto> {
+    let result: AppResult<TopicOperationsOverviewResponseDto> = TopicService::new(state.pool())
+        .get_topic_operations_overview(request)
+        .await;
+
+    result.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn update_topic_config(
+    state: State<'_, AppState>,
+    request: UpdateTopicConfigRequest,
+) -> Result<UpdateTopicConfigResponseDto, AppErrorDto> {
+    let result: AppResult<UpdateTopicConfigResponseDto> = TopicService::new(state.pool())
+        .update_topic_config(request)
         .await;
 
     result.map_err(Into::into)
