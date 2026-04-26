@@ -4,11 +4,14 @@ use crate::models::group::{
     GetGroupDetailRequest, GroupCoordinatorInfoDto, GroupDetailResponseDto, GroupPartitionLagDto,
     GroupSummaryDto, GroupTopicLagDto, ListGroupsRequest, UpdateGroupTagsRequest,
 };
+use crate::models::replay::AuditEventRecord;
 use crate::repositories::sqlite;
 use crate::services::kafka_config::apply_kafka_read_consumer_config;
+use chrono::Utc;
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
 use rdkafka::ClientConfig;
+use serde_json::json;
 use sqlx::SqlitePool;
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -212,6 +215,27 @@ impl<'a> GroupService<'a> {
             &chrono::Utc::now().to_rfc3339(),
         )
         .await?;
+
+        let audit_record = AuditEventRecord {
+            id: uuid::Uuid::new_v4().to_string(),
+            event_type: "group_tags_updated".to_string(),
+            target_type: "consumer_group".to_string(),
+            target_ref: Some(group_name.clone()),
+            actor_profile: Some(request.cluster_profile_id.clone()),
+            cluster_profile_id: Some(request.cluster_profile_id.clone()),
+            outcome: "success".to_string(),
+            summary: format!("Updated local tags for consumer group '{}'", group_name),
+            details_json: Some(
+                json!({
+                    "groupName": group_name,
+                    "tags": normalized_tags,
+                    "localOnly": true,
+                })
+                .to_string(),
+            ),
+            created_at: Utc::now().to_rfc3339(),
+        };
+        let _ = sqlite::insert_audit_event(self.pool, &audit_record).await;
 
         Ok(GroupSummaryDto {
             name: group_name,

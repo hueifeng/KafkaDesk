@@ -602,6 +602,27 @@ impl<'a> TopicService<'a> {
         )
         .await?;
 
+        let audit_record = AuditEventRecord {
+            id: Uuid::new_v4().to_string(),
+            event_type: "topic_tags_updated".to_string(),
+            target_type: "topic".to_string(),
+            target_ref: Some(topic_name.clone()),
+            actor_profile: Some(request.cluster_profile_id.clone()),
+            cluster_profile_id: Some(request.cluster_profile_id.clone()),
+            outcome: "success".to_string(),
+            summary: format!("Updated local tags for topic '{}'", topic_name),
+            details_json: Some(
+                json!({
+                    "topicName": topic_name,
+                    "tags": normalized_tags,
+                    "localOnly": true,
+                })
+                .to_string(),
+            ),
+            created_at: Utc::now().to_rfc3339(),
+        };
+        let _ = sqlite::insert_audit_event(self.pool, &audit_record).await;
+
         Ok(TopicSummaryDto {
             name: topic_name,
             partition_count,
