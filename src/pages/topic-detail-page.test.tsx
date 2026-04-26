@@ -4,19 +4,26 @@ import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CLUSTER_NAME, useWorkbenchStore } from '@/app/workbench-store';
-import { getTopicDetail, getTopicOperationsOverview, updateTopicConfig } from '@/features/topics/api';
-import type { TopicDetailResponse, TopicOperationsOverviewResponse, UpdateTopicConfigResponse } from '@/features/topics/types';
+import { expandTopicPartitions, getTopicDetail, getTopicOperationsOverview, updateTopicConfig } from '@/features/topics/api';
+import type {
+  ExpandTopicPartitionsResponse,
+  TopicDetailResponse,
+  TopicOperationsOverviewResponse,
+  UpdateTopicConfigResponse,
+} from '@/features/topics/types';
 import { TopicDetailPage } from '@/pages/topic-detail-page';
 
 vi.mock('@/features/topics/api', () => ({
   getTopicDetail: vi.fn(),
   getTopicOperationsOverview: vi.fn(),
   updateTopicConfig: vi.fn(),
+  expandTopicPartitions: vi.fn(),
 }));
 
 const mockedGetTopicDetail = vi.mocked(getTopicDetail);
 const mockedGetTopicOperationsOverview = vi.mocked(getTopicOperationsOverview);
 const mockedUpdateTopicConfig = vi.mocked(updateTopicConfig);
+const mockedExpandTopicPartitions = vi.mocked(expandTopicPartitions);
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -158,7 +165,7 @@ function buildConfigEntry(key: string, value: string) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   localStorage.clear();
   useWorkbenchStore.setState({
     recentItems: [],
@@ -277,6 +284,152 @@ describe('TopicDetailPage', () => {
       expect(document.body.textContent).toContain('最近一次已应用修改');
       expect(document.body.textContent).toContain('应用前');
       expect(document.body.textContent).toContain('应用后');
+    });
+  });
+
+  it('submits partition expansion with a fixed partition-count snapshot and acknowledgement', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+    const response: ExpandTopicPartitionsResponse = {
+      topicName: 'orders',
+      previousPartitionCount: 6,
+      requestedPartitionCount: 8,
+      resultingPartitionCount: 8,
+      auditRef: 'audit-partitions',
+      warning: null,
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+    mockedExpandTopicPartitions.mockResolvedValue(response);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('分区扩容');
+    });
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('分区扩容');
+    });
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('分区扩容');
+    });
+
+    await click(requireButtonByText('扩容分区'));
+
+    await waitFor(() => {
+      expect(requireElement<HTMLInputElement>('#topic-partition-requested-count').value).toBe('7');
+      expect(requireButtonByText('提交扩容').disabled).toBe(true);
+    });
+
+    await changeValue(requireElement<HTMLInputElement>('#topic-partition-requested-count'), '8');
+    await click(requireButtonByText('未确认'));
+
+    await waitFor(() => {
+      expect(requireButtonByText('提交扩容').disabled).toBe(false);
+    });
+
+    await click(requireButtonByText('提交扩容'));
+
+    await waitFor(() => {
+      expect(mockedExpandTopicPartitions).toHaveBeenCalledTimes(1);
+      expect(mockedExpandTopicPartitions.mock.calls[0]?.[0]).toEqual({
+        clusterProfileId: 'cluster-1',
+        topicName: 'orders',
+        requestedPartitionCount: 8,
+        expectedCurrentPartitionCount: 6,
+        riskAcknowledged: true,
+      });
+      expect(document.body.textContent).toContain('已提交 “orders” 的分区扩容请求。');
+      expect(document.body.textContent).toContain('最近一次分区扩容');
+      expect(document.body.textContent).toContain('审计引用：audit-partitions');
+    });
+  });
+
+  it('blocks partition expansion when the requested count is not greater than the snapshot', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+
+    await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('分区扩容');
+    });
+
+    await click(requireButtonByText('扩容分区'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-partition-requested-count'), '6');
+    await click(requireButtonByText('未确认'));
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('目标分区数必须大于当前分区数快照');
+      expect(requireButtonByText('提交扩容').disabled).toBe(true);
+    });
+
+    expect(mockedExpandTopicPartitions).not.toHaveBeenCalled();
+  });
+
+  it('blocks partition expansion when the partition-count snapshot becomes stale', async () => {
+    const topicDetail = buildTopicDetailResponse();
+    const overview: TopicOperationsOverviewResponse = {
+      status: 'passed',
+      message: 'ok',
+      stages: [],
+      configEntries: [buildConfigEntry('retention.ms', '604800000')],
+    };
+
+    mockedGetTopicDetail.mockResolvedValue(topicDetail);
+    mockedGetTopicOperationsOverview.mockResolvedValue(overview);
+
+    const { queryClient } = await renderWithProviders(
+      <Routes>
+        <Route path="/topics/:topicName" element={<TopicDetailPage />} />
+      </Routes>,
+      '/topics/orders',
+    );
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('分区扩容');
+    });
+
+    await click(requireButtonByText('扩容分区'));
+    await changeValue(requireElement<HTMLInputElement>('#topic-partition-requested-count'), '8');
+    await click(requireButtonByText('未确认'));
+
+    await act(async () => {
+      queryClient.setQueryData<TopicDetailResponse>(['topic-detail', 'cluster-1', 'orders'], {
+        ...topicDetail,
+        topic: { ...topicDetail.topic, partitionCount: 7 },
+      });
+    });
+
+    await waitFor(() => {
+      expect(document.body.textContent).toContain('当前分区数已变化');
+      expect(requireButtonByText('提交扩容').disabled).toBe(true);
     });
   });
 

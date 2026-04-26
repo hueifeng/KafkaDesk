@@ -3,8 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageFrame } from '@/components/layout/page-frame';
 import { useWorkbenchStore } from '@/app/workbench-store';
-import { getTopicDetail, getTopicOperationsOverview, updateTopicConfig } from '@/features/topics/api';
+import { expandTopicPartitions, getTopicDetail, getTopicOperationsOverview, updateTopicConfig } from '@/features/topics/api';
 import type {
+  ExpandTopicPartitionsInput,
+  ExpandTopicPartitionsResponse,
   TopicDetailResponse,
   TopicOperationConfigEntry,
   TopicOperationsOverviewResponse,
@@ -232,14 +234,30 @@ type TopicConfigLastApplied = {
   warning?: string | null;
 };
 
+type TopicPartitionExpansionDraft = {
+  requestedPartitionCount: string;
+  expectedCurrentPartitionCount: number;
+  riskAcknowledged: boolean;
+};
+
+type TopicPartitionExpansionLastApplied = {
+  previousPartitionCount: number;
+  requestedPartitionCount: number;
+  resultingPartitionCount: number;
+  auditRef?: string | null;
+  warning?: string | null;
+};
+
 export function TopicDetailPage() {
   const queryClient = useQueryClient();
   const { topicName } = useParams<{ topicName: string }>();
   const activeClusterProfileId = useWorkbenchStore((state) => state.activeClusterProfileId);
   const decodedTopicName = topicName ? decodeURIComponent(topicName) : null;
   const [draft, setDraft] = useState<TopicConfigDraft | null>(null);
+  const [partitionDraft, setPartitionDraft] = useState<TopicPartitionExpansionDraft | null>(null);
   const [feedback, setFeedback] = useState<TopicConfigFeedback | null>(null);
   const [lastApplied, setLastApplied] = useState<TopicConfigLastApplied | null>(null);
+  const [lastPartitionExpansion, setLastPartitionExpansion] = useState<TopicPartitionExpansionLastApplied | null>(null);
 
   const detailQuery = useQuery<TopicDetailResponse, AppError>({
     queryKey: ['topic-detail', activeClusterProfileId, topicName],
@@ -298,6 +316,36 @@ export function TopicDetailPage() {
     },
   });
 
+  const partitionExpansionMutation = useMutation<ExpandTopicPartitionsResponse, AppError, ExpandTopicPartitionsInput>({
+    mutationFn: expandTopicPartitions,
+    onSuccess: async (result) => {
+      const details = [
+        `结果分区数：${result.resultingPartitionCount}`,
+        result.auditRef ? `审计引用：${result.auditRef}` : '审计引用暂未写入，请查看后台日志。',
+        result.warning ?? null,
+      ].filter((item): item is string => Boolean(item));
+
+      setFeedback({
+        tone: result.warning ? 'warning' : 'success',
+        message: `已提交 “${result.topicName}” 的分区扩容请求。`,
+        details,
+      });
+      setLastPartitionExpansion({
+        previousPartitionCount: result.previousPartitionCount,
+        requestedPartitionCount: result.requestedPartitionCount,
+        resultingPartitionCount: result.resultingPartitionCount,
+        auditRef: result.auditRef,
+        warning: result.warning,
+      });
+      setPartitionDraft(null);
+      await queryClient.invalidateQueries({ queryKey: ['topic-detail', activeClusterProfileId, topicName] });
+      await queryClient.invalidateQueries({ queryKey: ['topic-operations-overview', activeClusterProfileId, topicName] });
+    },
+    onError: (error) => {
+      setFeedback({ tone: 'danger', message: error.message });
+    },
+  });
+
   const activeDraftEntry = useMemo(() => {
     if (!draft) {
       return null;
@@ -342,6 +390,34 @@ export function TopicDetailPage() {
         !updateMutation.isPending,
     );
 
+  const currentPartitionCount = detailQuery.data?.topic.partitionCount ?? null;
+  const partitionRequestedCount = partitionDraft ? Number(partitionDraft.requestedPartitionCount.trim()) : null;
+  const partitionDraftValueInvalid = Boolean(
+    partitionDraft &&
+      (partitionDraft.requestedPartitionCount.trim().length === 0 ||
+        !isDigitsOnly(partitionDraft.requestedPartitionCount.trim()) ||
+        !Number.isSafeInteger(partitionRequestedCount) ||
+        (partitionRequestedCount ?? 0) <= 0),
+  );
+  const partitionDraftHasStaleConflict = Boolean(
+    partitionDraft &&
+      currentPartitionCount !== null &&
+      currentPartitionCount !== partitionDraft.expectedCurrentPartitionCount,
+  );
+  const partitionDraftHasIncrease = Boolean(
+    partitionDraft &&
+      !partitionDraftValueInvalid &&
+      partitionRequestedCount !== null &&
+      partitionRequestedCount > partitionDraft.expectedCurrentPartitionCount,
+  );
+  const partitionDraftCanSubmit = Boolean(
+    partitionDraft &&
+      !partitionDraftHasStaleConflict &&
+      partitionDraftHasIncrease &&
+      partitionDraft.riskAcknowledged &&
+      !partitionExpansionMutation.isPending,
+  );
+
   const handleOpenEditor = (entry: TopicOperationConfigEntry) => {
     if (updateMutation.isPending) {
       return;
@@ -368,6 +444,19 @@ export function TopicDetailPage() {
     setFeedback(null);
   };
 
+  const handleOpenPartitionExpansion = () => {
+    if (partitionExpansionMutation.isPending || currentPartitionCount === null) {
+      return;
+    }
+
+    setPartitionDraft({
+      requestedPartitionCount: String(currentPartitionCount + 1),
+      expectedCurrentPartitionCount: currentPartitionCount,
+      riskAcknowledged: false,
+    });
+    setFeedback(null);
+  };
+
   const handleSaveDraft = () => {
     if (!draft || !activeClusterProfileId || !decodedTopicName) {
       return;
@@ -384,6 +473,24 @@ export function TopicDetailPage() {
       requestedValue: normalizeRequestedValueForSubmit(draft.configKey, draft.requestedValue),
       expectedCurrentValue: draft.expectedCurrentValue,
       riskAcknowledged: draft.riskAcknowledged,
+    });
+  };
+
+  const handleSavePartitionExpansion = () => {
+    if (!partitionDraft || !activeClusterProfileId || !decodedTopicName || partitionRequestedCount === null) {
+      return;
+    }
+
+    if (partitionExpansionMutation.isPending || !partitionDraftCanSubmit) {
+      return;
+    }
+
+    partitionExpansionMutation.mutate({
+      clusterProfileId: activeClusterProfileId,
+      topicName: decodedTopicName,
+      requestedPartitionCount: partitionRequestedCount,
+      expectedCurrentPartitionCount: partitionDraft.expectedCurrentPartitionCount,
+      riskAcknowledged: partitionDraft.riskAcknowledged,
     });
   };
 
@@ -556,6 +663,169 @@ export function TopicDetailPage() {
                           </div>
                         ))}
                       </div>
+                    </div>
+
+                    <div className="workspace-block">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="workspace-section-label">分区扩容</div>
+                          <div className="workspace-note">
+                            只允许增加分区数；提交前会重新校验当前分区快照并要求风险确认。
+                          </div>
+                        </div>
+                        {!partitionDraft ? (
+                          <button
+                            type="button"
+                            className="button-shell"
+                            data-variant="ghost"
+                            disabled={partitionExpansionMutation.isPending || currentPartitionCount === null}
+                            onClick={handleOpenPartitionExpansion}
+                          >
+                            扩容分区
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {lastPartitionExpansion ? (
+                        <div className="topic-config-applied-card mt-4">
+                          <div className="topic-config-applied-head">
+                            <div>
+                              <p className="field-label">最近一次分区扩容</p>
+                              <p className="topic-config-applied-title font-mono">{decodedTopicName}</p>
+                            </div>
+                            <Badge tone={lastPartitionExpansion.warning ? 'warning' : 'success'}>
+                              {lastPartitionExpansion.warning ? '已提交但需关注' : '已提交'}
+                            </Badge>
+                          </div>
+                          <div className="topic-config-compare-grid mt-3">
+                            <div className="topic-config-compare-card" data-tone="current">
+                              <p className="topic-config-compare-label">扩容前</p>
+                              <p className="topic-config-compare-value font-mono">{lastPartitionExpansion.previousPartitionCount}</p>
+                            </div>
+                            <div className="topic-config-compare-divider">→</div>
+                            <div className="topic-config-compare-card" data-tone="next">
+                              <p className="topic-config-compare-label">扩容后</p>
+                              <p className="topic-config-compare-value font-mono">{lastPartitionExpansion.resultingPartitionCount}</p>
+                            </div>
+                          </div>
+                          <div className="topic-config-applied-meta mt-3">
+                            <span>请求分区数：{lastPartitionExpansion.requestedPartitionCount}</span>
+                            <span>审计引用：{lastPartitionExpansion.auditRef ?? '暂未写入'}</span>
+                            {lastPartitionExpansion.warning ? <span>{lastPartitionExpansion.warning}</span> : null}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {partitionDraft ? (
+                        <div className="mt-4 space-y-4">
+                          <div className="topic-config-compare-grid">
+                            <div className="topic-config-compare-card" data-tone="current">
+                              <p className="topic-config-compare-label">当前分区数快照</p>
+                              <p className="topic-config-compare-value font-mono">{partitionDraft.expectedCurrentPartitionCount}</p>
+                              <p className="topic-config-compare-note">提交时会校验 Topic 仍然保持这个分区数。</p>
+                            </div>
+                            <div className="topic-config-compare-divider">→</div>
+                            <div className="topic-config-compare-card" data-tone="next">
+                              <p className="topic-config-compare-label">目标分区数</p>
+                              <p className="topic-config-compare-value font-mono">{partitionDraft.requestedPartitionCount.trim() || '—'}</p>
+                              <p className="topic-config-compare-note">Kafka 只支持增加分区数，不能降低分区数。</p>
+                            </div>
+                          </div>
+
+                          {partitionDraftHasStaleConflict ? (
+                            <div className="feedback-banner" data-tone="warning" role="status" aria-live="polite">
+                              当前分区数已变化，请关闭扩容编辑器并重新打开后再提交。
+                            </div>
+                          ) : !partitionDraftHasIncrease ? (
+                            <div className="feedback-banner" data-tone="muted" role="status" aria-live="polite">
+                              目标分区数必须大于当前分区数快照。
+                            </div>
+                          ) : null}
+
+                          <div className="form-grid">
+                            <div>
+                              <label className="field-label" htmlFor="topic-partition-requested-count">
+                                目标分区数
+                              </label>
+                              <input
+                                id="topic-partition-requested-count"
+                                className="field-shell w-full font-mono"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                value={partitionDraft.requestedPartitionCount}
+                                disabled={partitionExpansionMutation.isPending}
+                                onChange={(event) =>
+                                  setPartitionDraft((current) =>
+                                    current && !partitionExpansionMutation.isPending
+                                      ? { ...current, requestedPartitionCount: event.target.value }
+                                      : current,
+                                  )
+                                }
+                              />
+                              {partitionDraftValueInvalid ? (
+                                <div className="feedback-banner mt-3" data-tone="warning">
+                                  这里只接受大于 0 的纯数字分区数。
+                                </div>
+                              ) : null}
+                            </div>
+                            <div>
+                              <div className="field-label">提交时快照</div>
+                              <div className="field-shell flex min-h-[2.75rem] w-full items-center font-mono text-sm text-ink-dim">
+                                {partitionDraft.expectedCurrentPartitionCount}
+                              </div>
+                              <p className="workspace-note mt-2">该值来自打开扩容编辑器时读取到的当前分区数。</p>
+                            </div>
+                          </div>
+
+                          <div className="list-row items-center">
+                            <div>
+                              <p className="list-row-title">风险确认</p>
+                              <p className="list-row-meta">分区扩容不可回退，且会影响后续生产者 key 分布与消费者并行度。</p>
+                            </div>
+                            <button
+                              type="button"
+                              className="button-shell"
+                              data-variant={partitionDraft.riskAcknowledged ? 'primary' : 'ghost'}
+                              aria-pressed={partitionDraft.riskAcknowledged}
+                              disabled={partitionExpansionMutation.isPending}
+                              onClick={() =>
+                                setPartitionDraft((current) =>
+                                  current && !partitionExpansionMutation.isPending
+                                    ? { ...current, riskAcknowledged: !current.riskAcknowledged }
+                                    : current,
+                                )
+                              }
+                            >
+                              {partitionDraft.riskAcknowledged ? '已确认' : '未确认'}
+                            </button>
+                          </div>
+
+                          <div className="workspace-actions justify-end">
+                            <button
+                              type="button"
+                              className="button-shell"
+                              data-variant="ghost"
+                              disabled={partitionExpansionMutation.isPending}
+                              onClick={() => {
+                                setPartitionDraft(null);
+                                setFeedback(null);
+                              }}
+                            >
+                              取消
+                            </button>
+                            <button
+                              type="button"
+                              className="button-shell"
+                              data-variant="primary"
+                              disabled={!partitionDraftCanSubmit}
+                              onClick={handleSavePartitionExpansion}
+                            >
+                              {partitionExpansionMutation.isPending ? '扩容中…' : '提交扩容'}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
                     <div className="workspace-block">
