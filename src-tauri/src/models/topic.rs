@@ -46,6 +46,15 @@ pub struct TopicSummaryDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activity_hint: Option<String>,
     pub is_favorite: bool,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTopicTagsRequest {
+    pub cluster_profile_id: String,
+    pub topic_name: String,
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -2,7 +2,7 @@ use crate::models::cluster::ClusterProfileDto;
 use crate::models::error::{AppError, AppResult};
 use crate::models::group::{
     GetGroupDetailRequest, GroupCoordinatorInfoDto, GroupDetailResponseDto, GroupPartitionLagDto,
-    GroupSummaryDto, GroupTopicLagDto, ListGroupsRequest,
+    GroupSummaryDto, GroupTopicLagDto, ListGroupsRequest, UpdateGroupTagsRequest,
 };
 use crate::repositories::sqlite;
 use crate::services::kafka_config::apply_kafka_read_consumer_config;
@@ -45,7 +45,7 @@ impl<'a> GroupService<'a> {
         let lagging_only = request.lagging_only.unwrap_or(false);
         let limit = request.limit.unwrap_or(200).min(500);
 
-        tokio::task::spawn_blocking(move || {
+        let mut groups = tokio::task::spawn_blocking(move || {
             let inspector = build_group_consumer(&profile, None)?;
             let group_list = inspector
                 .fetch_group_list(None, Duration::from_secs(5))
@@ -85,6 +85,7 @@ impl<'a> GroupService<'a> {
                     topic_count: snapshot.topic_count,
                     partition_count: snapshot.partition_count,
                     last_seen_at: None,
+                    tags: Vec::new(),
                 });
             }
 
@@ -99,7 +100,14 @@ impl<'a> GroupService<'a> {
             Ok::<Vec<GroupSummaryDto>, AppError>(rows)
         })
         .await
-        .map_err(|error| AppError::Internal(format!("failed to join groups task: {error}")))?
+        .map_err(|error| AppError::Internal(format!("failed to join groups task: {error}")))??;
+
+        let tag_map = sqlite::get_group_tags_map(self.pool, &request.cluster_profile_id).await?;
+        for group in &mut groups {
+            group.tags = tag_map.get(&group.name).cloned().unwrap_or_default();
+        }
+
+        Ok(groups)
     }
 
     pub async fn get_group_detail(
@@ -111,7 +119,7 @@ impl<'a> GroupService<'a> {
         let profile = sqlite::get_cluster_profile(self.pool, &request.cluster_profile_id).await?;
         let group_name = request.group_name.clone();
 
-        tokio::task::spawn_blocking(move || {
+        let mut response = tokio::task::spawn_blocking(move || {
             let inspector = build_group_consumer(&profile, None)?;
             let group_list = inspector
                 .fetch_group_list(Some(&group_name), Duration::from_secs(5))
@@ -137,6 +145,7 @@ impl<'a> GroupService<'a> {
                     topic_count: snapshot.topic_count,
                     partition_count: snapshot.partition_count,
                     last_seen_at: None,
+                    tags: Vec::new(),
                 },
                 topic_lag_breakdown: snapshot.topic_breakdown,
                 partition_lag_breakdown: snapshot.partition_breakdown,
@@ -153,8 +162,95 @@ impl<'a> GroupService<'a> {
             })
         })
         .await
-        .map_err(|error| AppError::Internal(format!("failed to join group detail task: {error}")))?
+        .map_err(|error| AppError::Internal(format!("failed to join group detail task: {error}")))??;
+
+        let tag_map = sqlite::get_group_tags_map(self.pool, &request.cluster_profile_id).await?;
+        response.group.tags = tag_map.get(&response.group.name).cloned().unwrap_or_default();
+
+        Ok(response)
     }
+
+    pub async fn update_group_tags(
+        &self,
+        request: UpdateGroupTagsRequest,
+    ) -> AppResult<GroupSummaryDto> {
+        validate_update_group_tags_request(&request)?;
+        let profile = sqlite::get_cluster_profile(self.pool, &request.cluster_profile_id).await?;
+        let group_name = request.group_name.trim().to_string();
+        let normalized_tags = normalize_tags(&request.tags);
+        let (state, snapshot) = tokio::task::spawn_blocking({
+            let profile = profile.clone();
+            let group_name = group_name.clone();
+            move || {
+                let inspector = build_group_consumer(&profile, None)?;
+                let group_list = inspector
+                    .fetch_group_list(Some(&group_name), Duration::from_secs(5))
+                    .map_err(|error| {
+                        AppError::Network(format!(
+                            "failed to load consumer group '{}' for tag update: {error}",
+                            group_name
+                        ))
+                    })?;
+                let group = group_list
+                    .groups()
+                    .iter()
+                    .find(|item| item.name() == group_name)
+                    .ok_or_else(|| AppError::NotFound(format!("group '{}' was not found", group_name)))?;
+                let state = group.state().to_string();
+                let snapshot = build_group_lag_snapshot(&profile, &group_name)?;
+                Ok::<(String, GroupLagSnapshot), AppError>((state, snapshot))
+            }
+        })
+        .await
+        .map_err(|error| AppError::Internal(format!("failed to join group tags task: {error}")))??;
+
+        sqlite::upsert_group_tags(
+            self.pool,
+            &request.cluster_profile_id,
+            &group_name,
+            &normalized_tags,
+            &chrono::Utc::now().to_rfc3339(),
+        )
+        .await?;
+
+        Ok(GroupSummaryDto {
+            name: group_name,
+            state,
+            total_lag: snapshot.total_lag,
+            topic_count: snapshot.topic_count,
+            partition_count: snapshot.partition_count,
+            last_seen_at: None,
+            tags: normalized_tags,
+        })
+    }
+}
+
+fn normalize_tags(tags: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for tag in tags {
+        let trimmed = tag.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !normalized.iter().any(|existing| existing == trimmed) {
+            normalized.push(trimmed.to_string());
+        }
+    }
+    normalized
+}
+
+fn validate_update_group_tags_request(request: &UpdateGroupTagsRequest) -> AppResult<()> {
+    if request.cluster_profile_id.trim().is_empty() {
+        return Err(AppError::Validation(
+            "cluster profile id is required".to_string(),
+        ));
+    }
+
+    if request.group_name.trim().is_empty() {
+        return Err(AppError::Validation("group name is required".to_string()));
+    }
+
+    Ok(())
 }
 
 fn build_group_consumer(

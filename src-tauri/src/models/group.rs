@@ -33,6 +33,15 @@ pub struct GroupSummaryDto {
     pub partition_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_seen_at: Option<String>,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateGroupTagsRequest {
+    pub cluster_profile_id: String,
+    pub group_name: String,
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

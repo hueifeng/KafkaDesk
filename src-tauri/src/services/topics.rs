@@ -107,6 +107,7 @@ impl<'a> TopicService<'a> {
         }
 
         let profile = sqlite::get_cluster_profile(self.pool, &request.cluster_profile_id).await?;
+        let cluster_profile_id = request.cluster_profile_id.clone();
         let query = request
             .query
             .clone()
@@ -146,7 +147,14 @@ impl<'a> TopicService<'a> {
             AppError::Internal(format!("failed to join Kafka metadata task: {error}"))
         })??;
 
-        Ok(topics)
+        let tag_map = sqlite::get_topic_tags_map(self.pool, &cluster_profile_id).await?;
+        Ok(topics
+            .into_iter()
+            .map(|mut topic| {
+                topic.tags = tag_map.get(&topic.name).cloned().unwrap_or_default();
+                topic
+            })
+            .collect())
     }
 
     pub async fn get_topic_detail(
@@ -156,9 +164,10 @@ impl<'a> TopicService<'a> {
         validate_get_topic_detail_request(&request)?;
 
         let profile = sqlite::get_cluster_profile(self.pool, &request.cluster_profile_id).await?;
+        let cluster_profile_id = request.cluster_profile_id.clone();
         let topic_name = request.topic_name.clone();
 
-        tokio::task::spawn_blocking(move || {
+        let mut response = tokio::task::spawn_blocking(move || {
             let consumer = build_metadata_consumer(&profile)?;
             let metadata = consumer
                 .fetch_metadata(Some(&topic_name), Duration::from_secs(5))
@@ -230,7 +239,12 @@ impl<'a> TopicService<'a> {
             })
         })
         .await
-        .map_err(|error| AppError::Internal(format!("failed to join topic detail task: {error}")))?
+        .map_err(|error| AppError::Internal(format!("failed to join topic detail task: {error}")))??;
+
+        let tag_map = sqlite::get_topic_tags_map(self.pool, &cluster_profile_id).await?;
+        response.topic.tags = tag_map.get(&response.topic.name).cloned().unwrap_or_default();
+
+        Ok(response)
     }
 
     pub async fn get_topic_operations_overview(
@@ -566,6 +580,43 @@ impl<'a> TopicService<'a> {
             resulting_partition_count,
             audit_ref,
             warning: (!warning_messages.is_empty()).then(|| warning_messages.join(" ")),
+        })
+    }
+
+    pub async fn update_topic_tags(
+        &self,
+        request: crate::models::topic::UpdateTopicTagsRequest,
+    ) -> AppResult<TopicSummaryDto> {
+        validate_update_topic_tags_request(&request)?;
+        let profile = sqlite::get_cluster_profile(self.pool, &request.cluster_profile_id).await?;
+        let topic_name = request.topic_name.trim().to_string();
+        let normalized_tags = normalize_tags(&request.tags);
+
+        let partition_count = fetch_topic_partition_count(&profile, &topic_name).await?;
+        sqlite::upsert_topic_tags(
+            self.pool,
+            &request.cluster_profile_id,
+            &topic_name,
+            &normalized_tags,
+            &Utc::now().to_rfc3339(),
+        )
+        .await?;
+
+        Ok(TopicSummaryDto {
+            name: topic_name,
+            partition_count,
+            replication_factor: None,
+            schema_type: None,
+            retention_summary: None,
+            activity_hint: Some(if partition_count > 32 {
+                "高分区规模".to_string()
+            } else if partition_count > 8 {
+                "中等分区规模".to_string()
+            } else {
+                "常规分区规模".to_string()
+            }),
+            is_favorite: false,
+            tags: normalized_tags,
         })
     }
 }
@@ -1736,14 +1787,45 @@ fn map_topic_summary(topic: &MetadataTopic) -> TopicSummaryDto {
         schema_type: None,
         retention_summary: None,
         activity_hint: Some(if partition_count > 32 {
-            "高分区".to_string()
+            "高分区规模".to_string()
         } else if partition_count > 8 {
-            "中等分区".to_string()
+            "中等分区规模".to_string()
         } else {
-            "常规".to_string()
+            "常规分区规模".to_string()
         }),
         is_favorite: false,
+        tags: Vec::new(),
     }
+}
+
+fn normalize_tags(tags: &[String]) -> Vec<String> {
+    let mut normalized = Vec::new();
+    for tag in tags {
+        let trimmed = tag.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if !normalized.iter().any(|existing| existing == trimmed) {
+            normalized.push(trimmed.to_string());
+        }
+    }
+    normalized
+}
+
+fn validate_update_topic_tags_request(
+    request: &crate::models::topic::UpdateTopicTagsRequest,
+) -> AppResult<()> {
+    if request.cluster_profile_id.trim().is_empty() {
+        return Err(AppError::Validation(
+            "cluster profile id is required".to_string(),
+        ));
+    }
+
+    if request.topic_name.trim().is_empty() {
+        return Err(AppError::Validation("topic name is required".to_string()));
+    }
+
+    Ok(())
 }
 
 async fn fetch_topic_partition_count(
