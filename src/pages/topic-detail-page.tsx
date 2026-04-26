@@ -212,6 +212,15 @@ function getNumericAdvisoryWarning(configKey: string, value: string) {
   return null;
 }
 
+function parseOffsetValue(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 
 
 type TopicConfigDraft = {
@@ -347,6 +356,36 @@ export function TopicDetailPage() {
       setFeedback({ tone: 'danger', message: error.message });
     },
   });
+
+  const activitySnapshot = useMemo(() => {
+    const partitions = detailQuery.data?.partitions ?? [];
+    const earliestOffsets = partitions
+      .map((partition) => parseOffsetValue(partition.earliestOffset))
+      .filter((value): value is number => value !== null);
+    const latestOffsets = partitions
+      .map((partition) => parseOffsetValue(partition.latestOffset))
+      .filter((value): value is number => value !== null);
+    const earliestOffset = earliestOffsets.length ? Math.min(...earliestOffsets) : null;
+    const latestOffset = latestOffsets.length ? Math.max(...latestOffsets) : null;
+    const visibleRecordEstimate = partitions.reduce((total, partition) => {
+      const earliest = parseOffsetValue(partition.earliestOffset);
+      const latest = parseOffsetValue(partition.latestOffset);
+      if (earliest === null || latest === null || latest < earliest) {
+        return total;
+      }
+
+      return total + latest - earliest + 1;
+    }, 0);
+    const relatedLag = (detailQuery.data?.relatedGroups ?? []).reduce((total, group) => total + group.totalLag, 0);
+
+    return {
+      earliestOffset,
+      latestOffset,
+      visibleRecordEstimate,
+      relatedGroupCount: detailQuery.data?.relatedGroups.length ?? 0,
+      relatedLag,
+    };
+  }, [detailQuery.data?.partitions, detailQuery.data?.relatedGroups]);
 
   const tagMutation = useMutation<unknown, AppError, UpdateTopicTagsInput>({
     mutationFn: updateTopicTags,
@@ -591,6 +630,34 @@ export function TopicDetailPage() {
                   <div className="workspace-note">
                     {detailQuery.data.topic.schemaType ?? '未知'} / {detailQuery.data.topic.retentionSummary ?? '暂未读取'}
                   </div>
+                </div>
+              </div>
+
+              <div className="workspace-block mb-3 rounded-2xl border border-line-subtle/60 bg-surface-2/70 p-4 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="workspace-section-label">Topic 活动快照</div>
+                    <p className="workspace-note">基于当前 low/high watermark 与关联消费组 lag，非历史吞吐量。</p>
+                  </div>
+                  <Badge tone="info">Snapshot</Badge>
+                </div>
+                <div className="topic-config-compare-grid mt-3">
+                  <div className="topic-config-compare-card" data-tone="current">
+                    <p className="topic-config-compare-label">Offset 范围</p>
+                    <p className="topic-config-compare-value font-mono">
+                      {activitySnapshot.earliestOffset ?? '—'} → {activitySnapshot.latestOffset ?? '—'}
+                    </p>
+                    <p className="topic-config-compare-note">当前最早 offset 到最新可见 offset。</p>
+                  </div>
+                  <div className="topic-config-compare-divider">·</div>
+                  <div className="topic-config-compare-card" data-tone="next">
+                    <p className="topic-config-compare-label">关联 Lag</p>
+                    <p className="topic-config-compare-value font-mono">{activitySnapshot.relatedLag}</p>
+                    <p className="topic-config-compare-note">来自 {activitySnapshot.relatedGroupCount} 个关联消费组快照。</p>
+                  </div>
+                </div>
+                <div className="workspace-note mt-3">
+                  当前可见记录估算：{activitySnapshot.visibleRecordEstimate}。该值来自每个分区当前 watermark 差值，不代表生产速率。
                 </div>
               </div>
 

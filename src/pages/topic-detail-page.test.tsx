@@ -147,8 +147,28 @@ function buildTopicDetailResponse(): TopicDetailResponse {
       isFavorite: false,
       tags: [],
     },
-    partitions: [],
-    relatedGroups: [],
+    partitions: [
+      {
+        partitionId: 0,
+        earliestOffset: '10',
+        latestOffset: '20',
+        leader: '1',
+        replicaStatus: '副本 3 / ISR 3',
+        consumerGroupSummary: 'orders-worker lag 4',
+      },
+      {
+        partitionId: 1,
+        earliestOffset: '30',
+        latestOffset: '34',
+        leader: '2',
+        replicaStatus: '副本 3 / ISR 3',
+        consumerGroupSummary: 'orders-audit lag 3',
+      },
+    ],
+    relatedGroups: [
+      { name: 'orders-worker', totalLag: 4, state: 'Stable · 影响 1 个分区' },
+      { name: 'orders-audit', totalLag: 3, state: 'Empty · 影响 1 个分区' },
+    ],
     advancedConfig: [{ key: 'brokerBootstrap', value: 'localhost:9092' }],
   };
 }
@@ -242,6 +262,10 @@ describe('TopicDetailPage', () => {
 
     await waitFor(() => {
       expect(document.body.textContent).toContain('高级配置');
+      expect(document.body.textContent).toContain('Topic 活动快照');
+      expect(document.body.textContent).toContain('10 → 34');
+      expect(document.body.textContent).toContain('关联 Lag');
+      expect(document.body.textContent).toContain('当前可见记录估算：16');
       expect(document.body.textContent).toContain('brokerBootstrap: localhost:9092');
       expect(document.body.textContent).toContain('retention.ms: 604800000');
     });
