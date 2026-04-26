@@ -70,6 +70,18 @@ Before applying Topic configuration changes, verify:
 
 If KafkaDesk reports that a config write was applied but verification or audit persistence returned a warning, treat the broker as potentially changed and review the displayed audit reference, warning text, and broker state before retrying.
 
+### Topic partition expansion
+
+KafkaDesk can request Topic partition count increases where the connected broker accepts Kafka admin `CreatePartitions` operations. Partition expansion is one-way: Kafka does not support shrinking a Topic back to the previous partition count.
+
+Before applying Topic partition expansion, verify:
+
+- the active cluster/environment is the intended target
+- the current partition count shown in the editor still matches the captured snapshot
+- the requested partition count is higher than the current count and operationally justified
+- producer key distribution and consumer group parallelism can tolerate the new partition layout
+- the audit result and post-write partition count are reviewed before retrying after warnings
+
 ### TLS / SSL runtime assumptions
 
 The repository currently builds Kafka TLS support through `rdkafka` with vendored OpenSSL in supported build environments. Downstream consumers that remove or replace that support can change secured-cluster behavior.

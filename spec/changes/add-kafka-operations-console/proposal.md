@@ -41,11 +41,12 @@ The first implemented slice is focused on safe Topic configuration management:
 
 - Topic configuration inspection and editable allowlist support are implemented for selected keys
 - Topic configuration updates require an explicit current-value snapshot and risk acknowledgement
+- Topic partition expansion execution is implemented with current-count snapshot validation, risk acknowledgement, post-write verification, and audit feedback
 - successful writes return applied/audit feedback, including warning states when verification or audit persistence is partial
 - unsupported or unavailable capabilities are surfaced truthfully in the Topic operations overview
 - user-facing docs now call out Topic configuration changes as live cluster operations with snapshot, acknowledgement, audit, and warning review expectations
 
-The remaining operations-console capabilities are still pending: Topic partition expansion execution, consumer offset reset execution, tag persistence/CRUD, traffic visibility, and Topic-level throttling or quota controls.
+The remaining operations-console capabilities are still pending: consumer offset reset execution, tag persistence/CRUD, traffic visibility, and Topic-level throttling or quota controls.
 
 ## Impact
 

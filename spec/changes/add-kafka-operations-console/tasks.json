@@ -16,10 +16,10 @@
     "task": "实现 Topic 配置查看、修改与分区扩容的安全工作流",
     "steps": [
       { "step": "增加 Topic 配置读取接口和可编辑字段白名单", "completed": true },
-      { "step": "增加分区数扩容接口与预检查逻辑", "completed": false },
+      { "step": "增加分区数扩容接口与预检查逻辑", "completed": true },
       { "step": "加入 preview、确认、审计与失败回显", "completed": true }
     ],
-    "passes": false
+    "passes": true
   },
   {
     "number": 3,
