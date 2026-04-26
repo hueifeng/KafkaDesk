@@ -34,6 +34,7 @@ export function GroupsPage() {
   const [query, setQuery] = useState('');
   const [laggingOnly, setLaggingOnly] = useState(true);
   const [sortBy, setSortBy] = useState<GroupSort>('totalLag');
+  const [tagFilter, setTagFilter] = useState('');
 
   const groupsQuery = useQuery<GroupSummary[], AppError>({
     queryKey: ['groups', activeClusterProfileId, query, laggingOnly],
@@ -47,7 +48,16 @@ export function GroupsPage() {
       }),
   });
 
-  const groups = useMemo(() => sortGroups(groupsQuery.data ?? [], sortBy), [groupsQuery.data, sortBy]);
+  const allTags = useMemo(
+    () => Array.from(new Set((groupsQuery.data ?? []).flatMap((group) => group.tags))).sort((left, right) => left.localeCompare(right, 'zh-CN')),
+    [groupsQuery.data],
+  );
+  const groups = useMemo(() => {
+    const filtered = tagFilter
+      ? (groupsQuery.data ?? []).filter((group) => group.tags.includes(tagFilter))
+      : (groupsQuery.data ?? []);
+    return sortGroups(filtered, sortBy);
+  }, [groupsQuery.data, sortBy, tagFilter]);
 
   return (
     <PageFrame
@@ -79,6 +89,15 @@ export function GroupsPage() {
                 <option value="state">按状态</option>
               </select>
             </div>
+            <div className="lg:col-span-4">
+              <label className="field-label" htmlFor="groups-tag-filter">标签</label>
+              <select id="groups-tag-filter" className="field-shell w-full" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+                <option value="">全部标签</option>
+                {allTags.map((tag) => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {!activeClusterProfileId ? (
@@ -99,12 +118,13 @@ export function GroupsPage() {
             <TableShell
               initialVisibleRowCount={50}
               rowLabel="个消费组"
-              columns={['消费组', '状态', '总积压', '主题数', '分区数', '最近活动', '操作']}
+              columns={['消费组', '标签', '状态', '总积压', '主题数', '分区数', '最近活动', '操作']}
               emptyState={<EmptyState title="没有匹配的消费组" description="请调整筛选条件，或确认当前集群中存在消费组。" />}
             >
               {groups.map((group) => (
                 <tr key={group.name}>
                   <td className="font-medium text-ink">{group.name}</td>
+                  <td>{group.tags.length ? group.tags.join(' · ') : '—'}</td>
                   <td>{group.state}</td>
                   <td>{group.totalLag}</td>
                   <td>{group.topicCount}</td>

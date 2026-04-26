@@ -35,6 +35,7 @@ export function TopicsPage() {
   const [query, setQuery] = useState('');
   const [includeInternal, setIncludeInternal] = useState(false);
   const [sortBy, setSortBy] = useState<TopicSort>('name');
+  const [tagFilter, setTagFilter] = useState('');
   const [selectedTopicName, setSelectedTopicName] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -51,7 +52,16 @@ export function TopicsPage() {
       }),
   });
 
-  const sortedTopics = useMemo(() => sortTopics(topicsQuery.data ?? [], sortBy), [sortBy, topicsQuery.data]);
+  const allTags = useMemo(
+    () => Array.from(new Set((topicsQuery.data ?? []).flatMap((topic) => topic.tags))).sort((left, right) => left.localeCompare(right, 'zh-CN')),
+    [topicsQuery.data],
+  );
+  const sortedTopics = useMemo(() => {
+    const filtered = tagFilter
+      ? (topicsQuery.data ?? []).filter((topic) => topic.tags.includes(tagFilter))
+      : (topicsQuery.data ?? []);
+    return sortTopics(filtered, sortBy);
+  }, [sortBy, tagFilter, topicsQuery.data]);
   const visibleTopics = useMemo(() => sortedTopics.slice(0, 50), [sortedTopics]);
   const selectedTopic = useMemo(
     () => sortedTopics.find((topic) => topic.name === selectedTopicName) ?? null,
@@ -120,6 +130,15 @@ export function TopicsPage() {
                 <option value="activityHint">分区规模</option>
               </select>
             </div>
+            <div className="lg:col-span-4">
+              <label className="field-label" htmlFor="topics-tag-filter">标签</label>
+              <select id="topics-tag-filter" className="field-shell w-full" value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+                <option value="">全部标签</option>
+                {allTags.map((tag) => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {feedback ? (
@@ -146,7 +165,7 @@ export function TopicsPage() {
             <TableShell
               initialVisibleRowCount={50}
               rowLabel="个主题"
-              columns={['主题名称', '分区', '副本', 'Schema', 'Retention', '分区规模', '操作']}
+              columns={['主题名称', '标签', '分区', '副本', 'Schema', 'Retention', '分区规模', '操作']}
               emptyState={<EmptyState title="没有匹配结果" description="请调整筛选条件。" />}
             >
               {sortedTopics.map((topic) => {
@@ -163,6 +182,7 @@ export function TopicsPage() {
                         <span className="font-medium">{topic.name}</span>
                       </button>
                     </td>
+                    <td>{topic.tags.length ? topic.tags.join(' · ') : '—'}</td>
                     <td>{topic.partitionCount}</td>
                     <td>{topic.replicationFactor ?? '—'}</td>
                     <td>{topic.schemaType ?? '未知'}</td>
@@ -214,6 +234,12 @@ export function TopicsPage() {
                   <p className="list-row-meta">
                     {selectedTopic.partitionCount} / {selectedTopic.replicationFactor ?? '—'}
                   </p>
+                </div>
+              </div>
+              <div className="list-row">
+                <div>
+                  <p className="list-row-title">本地标签</p>
+                  <p className="list-row-meta">{selectedTopic.tags.length ? selectedTopic.tags.join(' · ') : '暂无标签'}</p>
                 </div>
               </div>
               <div className="list-row">
