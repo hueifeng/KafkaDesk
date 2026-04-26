@@ -14,6 +14,7 @@ Use this directory to go deeper than the root [`README.md`](../README.md).
 - [`product/README.md`](./product/README.md) for the current product docs index
 - [`product/release-distribution.md`](./product/release-distribution.md) for release, download, and packaging behavior
 - [`decisions/adr-2026-04-sprint-1-validation-hardening.md`](./decisions/adr-2026-04-sprint-1-validation-hardening.md) for the accepted validation hardening decision
+- [`decisions/adr-2026-04-consumer-offset-reset-ffi-deferral.md`](./decisions/adr-2026-04-consumer-offset-reset-ffi-deferral.md) for the Consumer Offset Reset FFI deferral decision
 
 ## Technical reference
 

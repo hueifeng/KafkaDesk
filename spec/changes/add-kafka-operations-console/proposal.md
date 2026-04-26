@@ -49,7 +49,7 @@ The first implemented slice is focused on safe Topic configuration management:
 - unsupported or unavailable capabilities are surfaced truthfully in the Topic operations overview
 - user-facing docs now call out Topic configuration changes as live cluster operations with snapshot, acknowledgement, audit, and warning review expectations
 
-Remaining operations-console gaps are persistent Consumer Offset Reset execution, tag filtering/audit integration, true traffic-rate visibility, and any future quota/throttling execution that can be tied to a truthful Kafka capability.
+Remaining operations-console gaps are persistent Consumer Offset Reset execution, true traffic-rate visibility, and any future quota/throttling execution that can be tied to a truthful Kafka capability.
 
 ## Impact
 

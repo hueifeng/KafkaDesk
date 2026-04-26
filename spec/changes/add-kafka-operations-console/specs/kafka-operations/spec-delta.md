@@ -47,21 +47,21 @@ WHEN the operator submits the request
 THEN the system rejects the request
 AND returns a validation error explaining that partition decrease is not supported
 
-### Requirement: Consumer Offset Reset
+### Requirement: Consumer Offset Reset Safety Boundary
 WHEN an operator manages a consumer group,
-the system SHALL support safe offset reset workflows for supported clusters.
+the system SHALL expose Consumer Offset Reset only as read-only candidate discovery until safe persistent reset support is available.
 
-#### Scenario: Offset reset supports standard modes
-GIVEN the connected cluster supports consumer offset administration
-WHEN the operator opens the offset reset workflow
-THEN the system offers reset modes for earliest, latest, timestamp, and explicit offset
+#### Scenario: Offset reset candidates are surfaced without mutation
+GIVEN KafkaDesk can read committed offsets and watermarks for a consumer group or Topic
+WHEN the operator opens the offset reset precheck surface
+THEN the system shows candidate groups, Topics, partitions, current offsets, log-end offsets, and lag where readable
+AND clearly states that no committed offsets are modified
 
-#### Scenario: Offset reset requires preview and risk confirmation
-GIVEN the operator selects a reset scope and mode
-WHEN the system prepares the reset action
-THEN the system shows the affected group, Topic, partitions, and target offsets
-AND requires explicit risk confirmation before execution
-AND records the action in audit history after execution
+#### Scenario: Persistent offset reset execution is deferred without a safe admin API
+GIVEN the current Kafka client binding does not expose safe arbitrary consumer-group offset alter wrappers
+WHEN the operator views the offset reset capability
+THEN the system marks persistent reset execution as pending or unsupported
+AND does not expose a misleading write action
 
 ### Requirement: Capability-Aware Kafka Administration
 WHEN KafkaDesk exposes a write-capable Kafka management action,
