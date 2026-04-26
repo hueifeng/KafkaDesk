@@ -166,6 +166,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import os
+          import hashlib
           import shutil
           from pathlib import Path
 
@@ -188,7 +189,11 @@ jobs:
                   renamed_path = path.with_name(f'KafkaDesk-{release_version}-{release_os}-{release_arch}{release_filename_suffix}')
                   if renamed_path != path:
                       shutil.copy2(path, renamed_path)
+                  digest = hashlib.sha256(renamed_path.read_bytes()).hexdigest()
+                  checksum_path = renamed_path.with_name(f'{renamed_path.name}.sha256')
+                  checksum_path.write_text(f'{digest}  {renamed_path.name}\n', encoding='utf-8')
                   release_files.append(renamed_path.as_posix())
+                  release_files.append(checksum_path.as_posix())
 
           if not release_files:
               visible = '\n'.join(sorted(p.as_posix() for p in root.rglob('*') if p.is_file()))
@@ -223,6 +228,24 @@ jobs:
           $archivePath = Join-Path $env:RUNNER_TEMP "kafkadesk-${{ steps.release_meta.outputs.version }}-${{ matrix.platform_id }}.zip"
           Compress-Archive -Path "src-tauri/target/release/bundle" -DestinationPath $archivePath -Force
           "archive_path=$archivePath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Verify bundle archive (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          test -s "${{ steps.archive_unix.outputs.archive_path }}"
+
+      - name: Verify bundle archive (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archivePath = "${{ steps.archive_windows.outputs.archive_path }}"
+          if (-not (Test-Path $archivePath)) {
+            throw "Bundle archive does not exist: $archivePath"
+          }
+          if ((Get-Item $archivePath).Length -le 0) {
+            throw "Bundle archive is empty: $archivePath"
+          }
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4

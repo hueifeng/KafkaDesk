@@ -35,6 +35,8 @@ Release asset names are rewritten before upload so the GitHub Releases page show
 
 The workflow also uploads per-platform bundle archives as Actions artifacts.
 
+Tag driven releases also upload `.sha256` checksum sidecars next to each native release asset, for example `KafkaDesk-0.1.0-windows-x64-setup.exe.sha256`.
+
 ## How release publishing works
 
 The workflow lives at `.github/workflows/package-desktop-bundles.yml`.
@@ -57,6 +59,8 @@ Each job uses the same checked-in build entry point:
 ```bash
 npm run tauri:build
 ```
+
+Packaging jobs verify that the per-platform bundle archive exists and is non-empty before upload. Native release assets are copied to deterministic names and paired with SHA-256 checksum files before publishing.
 
 ## Version alignment contract
 
