@@ -55,6 +55,8 @@ body {
 
   html {
     background-color: hsl(var(--bg-app));
+    scrollbar-color: hsl(var(--border-strong) / 0.58) hsl(var(--bg-app));
+    scrollbar-width: thin;
   }
 
   body {
@@ -74,6 +76,30 @@ body {
   ::selection {
     background: hsl(var(--accent-inspect) / 0.22);
     color: hsl(var(--text-primary));
+  }
+
+  * {
+    scrollbar-color: hsl(var(--border-strong) / 0.5) transparent;
+    scrollbar-width: thin;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0.7rem;
+    height: 0.7rem;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: hsl(var(--bg-app) / 0.35);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 2px solid hsl(var(--bg-app) / 0.35);
+    border-radius: 9999px;
+    background: hsl(var(--border-strong) / 0.55);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--accent-inspect) / 0.62);
   }
 
   button,
@@ -529,7 +555,8 @@ letter-spacing: normal;
   }
 
   .page-scroll {
-    @apply flex-1 overflow-y-auto px-4 py-3;
+    @apply flex-1 overflow-y-auto overflow-x-hidden px-4 py-3;
+    scrollbar-gutter: stable;
   }
 
   .workspace-stage {
@@ -598,7 +625,11 @@ padding: 0.75rem 1rem;
   .page-grid {
     display: grid;
 gap: 0.75rem;
-grid-template-columns: minmax(0, 1fr) 16rem;
+grid-template-columns: minmax(0, 1fr);
+
+@media (min-width: 1180px) {
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 18rem);
+}
   }
 
 .page-main {
@@ -784,7 +815,7 @@ color: hsl(var(--text-muted));
 }
 
   .table-shell {
-    overflow: hidden;
+    overflow: clip;
 border-radius: 0.375rem;
 border: 1px solid hsl(var(--border-subtle));
     background-color: hsl(var(--bg-panel) / 0.58);
@@ -792,9 +823,13 @@ border: 1px solid hsl(var(--border-subtle));
 
   .table-scroll {
     overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    scrollbar-gutter: stable;
   }
 
   .table-shell table {
+    min-width: max-content;
     width: 100%;
 border-collapse: collapse;
   }
@@ -823,7 +858,7 @@ color: hsl(var(--text-secondary));
   }
 
   .table-shell-footer {
-    display: block;
+    display: flex;
 flex-wrap: wrap;
 align-items: center;
 justify-content: space-between;
@@ -839,7 +874,7 @@ color: hsl(var(--text-muted));
   }
 
 .table-shell-actions {
-    display: block;
+    display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
 }
@@ -935,7 +970,7 @@ color: hsl(var(--text-secondary));
   }
 
 .subnav-shell {
-    display: block;
+    display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
 }
@@ -1229,23 +1264,33 @@ gap: 1rem;
   .workspace-surface {
     display: grid;
 min-height: 34rem;
-overflow: hidden;
+overflow: clip;
 border-radius: 0.375rem;
 border: 1px solid hsl(var(--border-subtle));
-grid-template-columns: minmax(0, 1fr) 16rem;
+grid-template-columns: minmax(0, 1fr);
     background-color: hsl(var(--bg-panel) / 0.42);
+
+@media (min-width: 1180px) {
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 18rem);
+}
   }
 
   .workspace-main {
     min-width: 0;
 padding: 0.75rem;
+overflow-x: hidden;
   }
 
   .workspace-sidebar {
     min-width: 0;
-border-left: 1px solid hsl(var(--border-subtle));
+border-top: 1px solid hsl(var(--border-subtle));
 padding: 0.75rem;
     background-color: hsl(var(--bg-surface) / 0.42);
+
+@media (min-width: 1180px) {
+    border-left: 1px solid hsl(var(--border-subtle));
+    border-top: 0;
+}
   }
 
   .workspace-toolbar {
