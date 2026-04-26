@@ -8,6 +8,7 @@ import type {
   TopicSummary,
   UpdateTopicConfigInput,
   UpdateTopicConfigResponse,
+  UpdateTopicTagsInput,
 } from '@/features/topics/types';
 
 export function listTopics(request: ListTopicsInput) {
@@ -38,4 +39,8 @@ export function updateTopicConfig(request: UpdateTopicConfigInput) {
 
 export function expandTopicPartitions(request: ExpandTopicPartitionsInput) {
   return invokeCommand<ExpandTopicPartitionsResponse>('expand_topic_partitions', { request });
+}
+
+export function updateTopicTags(request: UpdateTopicTagsInput) {
+  return invokeCommand<TopicSummary>('update_topic_tags', { request });
 }

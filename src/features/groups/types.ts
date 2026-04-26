@@ -14,6 +14,13 @@ export type GroupSummary = {
   topicCount: number;
   partitionCount: number;
   lastSeenAt?: string | null;
+  tags: string[];
+};
+
+export type UpdateGroupTagsInput = {
+  clusterProfileId: string;
+  groupName: string;
+  tags: string[];
 };
 
 export type GroupTopicLagItem = {

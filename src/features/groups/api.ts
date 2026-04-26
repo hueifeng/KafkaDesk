@@ -1,5 +1,5 @@
 import { invokeCommand } from '@/lib/tauri';
-import type { GroupDetailResponse, GroupSummary, ListGroupsInput } from '@/features/groups/types';
+import type { GroupDetailResponse, GroupSummary, ListGroupsInput, UpdateGroupTagsInput } from '@/features/groups/types';
 
 export function listGroups(request: ListGroupsInput) {
   return invokeCommand<GroupSummary[]>('list_groups', { request });
@@ -12,4 +12,8 @@ export function getGroupDetail(clusterProfileId: string, groupName: string) {
       groupName,
     },
   });
+}
+
+export function updateGroupTags(request: UpdateGroupTagsInput) {
+  return invokeCommand<GroupSummary>('update_group_tags', { request });
 }

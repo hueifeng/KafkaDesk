@@ -17,6 +17,13 @@ export type TopicSummary = {
   retentionSummary?: string | null;
   activityHint?: string | null;
   isFavorite: boolean;
+  tags: string[];
+};
+
+export type UpdateTopicTagsInput = {
+  clusterProfileId: string;
+  topicName: string;
+  tags: string[];
 };
 
 export type TopicPartitionSummary = {
