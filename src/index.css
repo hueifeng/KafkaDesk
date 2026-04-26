@@ -10,7 +10,7 @@ html {
 body {
   margin: 0;
   padding: 0;
-  font-family: system-ui, sans-serif;
+  font-family: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', sans-serif;
 }
 
 @layer base {
@@ -51,6 +51,7 @@ body {
     --shadow-panel: 0 14px 30px rgba(0, 0, 0, 0.18);
     --shadow-chrome: 0 10px 24px rgba(0, 0, 0, 0.16);
     --glow-signal: 0 0 0 2px rgba(110, 156, 216, 0.16);
+    --font-sans: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif;
   }
 
   html {
@@ -64,7 +65,8 @@ body {
     min-height: 100vh;
     background-color: hsl(var(--bg-app));
     color: hsl(var(--text-primary));
-    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif;
+    font-family: var(--font-sans);
+    text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     background-image: linear-gradient(180deg, hsl(var(--bg-surface)) 0%, hsl(var(--bg-app)) 100%);
   }
@@ -179,8 +181,10 @@ body {
     gap: 0.5rem;
     border-radius: 0.375rem;
     border: 1px solid transparent;
-    padding: 0.375rem 0.5rem;
-    font-size: 1rem;
+    min-height: 2.5rem;
+    padding: 0.5rem 0.625rem;
+    font-size: 0.94rem;
+    line-height: 1.25;
     color: hsl(var(--text-secondary));
     text-decoration: none;
     transition: all 0.2s ease;
@@ -276,7 +280,7 @@ letter-spacing: normal;
 
   .header-cluster-title {
     @apply mt-0.5 truncate text-sm font-semibold text-ink;
-    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+font-family: var(--font-sans);
   }
 
   .header-field-group {
@@ -407,7 +411,7 @@ letter-spacing: normal;
 
   .context-title {
     @apply text-sm font-medium text-ink;
-    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+font-family: var(--font-sans);
   }
 
   .context-meta {
@@ -452,7 +456,8 @@ letter-spacing: normal;
   }
 
   .header-quickjump-item {
-    @apply flex items-center gap-3 rounded-md px-2.5 py-1.5 no-underline transition;
+    @apply flex items-center gap-3 rounded-md px-2.5 py-2 no-underline transition;
+    min-height: 2.65rem;
   }
 
   .header-quickjump-item:hover,
@@ -491,7 +496,10 @@ letter-spacing: normal;
   }
 
   .button-shell {
-    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line px-3 py-1.5 text-sm font-medium text-ink no-underline transition;
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md border border-line px-3 text-sm font-medium text-ink no-underline transition;
+    min-height: 2.5rem;
+    padding-top: 0.55rem;
+    padding-bottom: 0.55rem;
     background-color: hsl(var(--bg-panel) / 0.86);
     transition-property: background-color, border-color, color, box-shadow, transform;
     transition-duration: 140ms;
@@ -590,7 +598,7 @@ letter-spacing: normal;
 font-weight: 600;
 letter-spacing: -0.015em;
 color: hsl(var(--text-primary));
-    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    font-family: var(--font-sans);
   }
 
   .page-description {
@@ -681,7 +689,7 @@ gap: 0.125rem;
     font-size: 0.95rem;
 font-weight: 600;
 color: hsl(var(--text-primary));
-    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    font-family: var(--font-sans);
   }
 
   .panel-kicker {
@@ -712,7 +720,7 @@ color: hsl(var(--text-secondary));
 font-size: 1.5rem;
 font-weight: 600;
 color: hsl(var(--text-primary));
-    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    font-family: var(--font-sans);
   }
 
 .signal-stat-note {
@@ -725,11 +733,13 @@ color: hsl(var(--text-primary));
     display: inline-flex;
 align-items: center;
 gap: 0.375rem;
-border-radius: 0.125rem;
+border-radius: 9999px;
 border: 1px solid hsl(var(--border-subtle));
-padding: 0.625rem 0.25rem;
+min-height: 1.75rem;
+padding: 0.35rem 0.6rem;
 font-size: 0.75rem;
 font-weight: 500;
+line-height: 1.1;
   }
 
 .field-shell {
@@ -836,18 +846,20 @@ border-collapse: collapse;
 
   .table-shell th {
     border-bottom: 1px solid hsl(var(--border-subtle));
-padding: 0.5rem 0.75rem;
+padding: 0.65rem 0.85rem;
 text-align: left;
-font-size: 0.72rem;
+font-size: 0.76rem;
 font-weight: 500;
 color: hsl(var(--text-muted));
     background-color: hsl(var(--bg-surface) / 0.74);
+    white-space: nowrap;
   }
 
   .table-shell td {
-    padding: 0.75rem 0.75rem;
+    padding: 0.85rem 0.85rem;
 vertical-align: top;
-font-size: 1rem;
+font-size: 0.9rem;
+line-height: 1.45;
 color: hsl(var(--text-secondary));
     border-bottom: 1px solid hsl(var(--border-subtle) / 0.85);
   }
@@ -1019,7 +1031,7 @@ color: hsl(var(--text-muted));
 font-size: 1.25rem;
 font-weight: 600;
 color: hsl(var(--text-primary));
-    font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+    font-family: var(--font-sans);
   }
 
   .status-note {
