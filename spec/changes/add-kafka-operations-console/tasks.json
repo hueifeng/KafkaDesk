@@ -37,7 +37,7 @@
     "category": "阶段 4：标签与视图管理",
     "task": "为集群、Topic、消费组增加标签与筛选能力",
     "steps": [
-      { "step": "扩展本地数据模型以保存标签与视图偏好", "completed": false },
+      { "step": "扩展本地数据模型以保存标签与视图偏好", "completed": true },
       { "step": "增加标签 CRUD 与列表筛选能力", "completed": false },
       { "step": "把标签集成到管理页面和审计上下文中", "completed": false }
     ],
@@ -48,7 +48,7 @@
     "category": "阶段 5：流量统计",
     "task": "实现 Topic 生产/消费流量统计与明细视图",
     "steps": [
-      { "step": "定义统计窗口、采样粒度与展示指标", "completed": false },
+      { "step": "定义统计窗口、采样粒度与展示指标", "completed": true },
       { "step": "增加 Topic 吞吐、积压、消费速率等查询路径", "completed": false },
       { "step": "在 UI 中提供概览与明细视图", "completed": false }
     ],
@@ -59,8 +59,8 @@
     "category": "阶段 6：限流与配额控制",
     "task": "实现 Topic 级限流/配额控制的 capability-aware 工作流",
     "steps": [
-      { "step": "确认 Kafka 平台对 Topic 限流或相关配额控制的支持边界", "completed": false },
-      { "step": "设计 capability-aware UI，只在支持的平台暴露可写操作", "completed": false },
+      { "step": "确认 Kafka 平台对 Topic 限流或相关配额控制的支持边界", "completed": true },
+      { "step": "设计 capability-aware UI，只在支持的平台暴露可写操作", "completed": true },
       { "step": "加入预览、确认、审计与回滚提示", "completed": false }
     ],
     "passes": false
