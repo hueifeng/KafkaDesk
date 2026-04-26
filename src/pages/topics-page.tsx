@@ -83,8 +83,8 @@ export function TopicsPage() {
     <PageFrame
       eyebrow="主题浏览"
       title="主题"
-      description="快速浏览与筛选主题。"
-      contextualInfo={<div><div className="workspace-note">主题筛选与预览反馈。</div></div>}
+      description="快速浏览、筛选主题，并查看当前 offset / lag 快照。"
+      contextualInfo={<div><div className="workspace-note">当前仅显示 Kafka 元数据、水位和消费组积压快照，不代表历史吞吐量或 records/sec。</div></div>}
     >
       <section className="workspace-surface">
         <div className="workspace-main">
@@ -117,7 +117,7 @@ export function TopicsPage() {
               <select id="topics-sort" className="field-shell w-full" value={sortBy} onChange={(event) => setSortBy(event.target.value as TopicSort)}>
                 <option value="name">名称</option>
                 <option value="partitionCount">分区数</option>
-                <option value="activityHint">活跃度</option>
+                <option value="activityHint">分区规模</option>
               </select>
             </div>
           </div>
@@ -146,7 +146,7 @@ export function TopicsPage() {
             <TableShell
               initialVisibleRowCount={50}
               rowLabel="个主题"
-              columns={['主题名称', '分区', '副本', 'Schema', 'Retention', '活跃度', '操作']}
+              columns={['主题名称', '分区', '副本', 'Schema', 'Retention', '分区规模', '操作']}
               emptyState={<EmptyState title="没有匹配结果" description="请调整筛选条件。" />}
             >
               {sortedTopics.map((topic) => {
@@ -226,8 +226,14 @@ export function TopicsPage() {
               </div>
               <div className="list-row">
                 <div>
-                  <p className="list-row-title">活跃度</p>
+                  <p className="list-row-title">分区规模</p>
                   <p className="list-row-meta">{selectedTopic.activityHint ?? '暂无'}</p>
+                </div>
+              </div>
+              <div className="list-row">
+                <div>
+                  <p className="list-row-title">快照说明</p>
+                  <p className="list-row-meta">这里只展示当前元数据和水位快照，不展示历史流量速率。</p>
                 </div>
               </div>
             </div>
