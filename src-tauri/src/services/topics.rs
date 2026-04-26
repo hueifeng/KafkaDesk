@@ -1,17 +1,18 @@
 use crate::models::cluster::ClusterProfileDto;
 use crate::models::error::{AppError, AppResult};
 use crate::models::topic::{
-    GetTopicDetailRequest, GetTopicOperationsOverviewRequest, ListTopicsRequest,
-    TopicConfigEntryDto, TopicDetailResponseDto, TopicOperationConfigEntryDto,
-    TopicOperationsOverviewResponseDto, TopicPartitionDto, TopicRelatedGroupDto, TopicSummaryDto,
-    UpdateTopicConfigRequest, UpdateTopicConfigResponseDto,
+    ExpandTopicPartitionsRequest, ExpandTopicPartitionsResponseDto, GetTopicDetailRequest,
+    GetTopicOperationsOverviewRequest, ListTopicsRequest, TopicConfigEntryDto,
+    TopicDetailResponseDto, TopicOperationConfigEntryDto, TopicOperationsOverviewResponseDto,
+    TopicPartitionDto, TopicRelatedGroupDto, TopicSummaryDto, UpdateTopicConfigRequest,
+    UpdateTopicConfigResponseDto,
 };
 use crate::models::replay::AuditEventRecord;
 use crate::models::validation::{summarize_validation_status, ValidationStageDto};
 use crate::repositories::sqlite;
 use crate::services::kafka_config::{apply_kafka_read_consumer_config, build_kafka_admin_client};
 use chrono::Utc;
-use rdkafka::admin::{AdminOptions, ConfigEntry, ConfigResource, ConfigSource, ResourceSpecifier};
+use rdkafka::admin::{AdminOptions, ConfigEntry, ConfigResource, ConfigSource, NewPartitions, ResourceSpecifier};
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::metadata::MetadataTopic;
 use rdkafka::topic_partition_list::{Offset, TopicPartitionList};
@@ -468,6 +469,149 @@ impl<'a> TopicService<'a> {
             warning: (!warning_messages.is_empty()).then(|| warning_messages.join(" ")),
         })
     }
+
+    pub async fn expand_topic_partitions(
+        &self,
+        request: ExpandTopicPartitionsRequest,
+    ) -> AppResult<ExpandTopicPartitionsResponseDto> {
+        validate_expand_topic_partitions_request(&request)?;
+
+        let profile = sqlite::get_cluster_profile(self.pool, &request.cluster_profile_id).await?;
+        let topic_name = request.topic_name.trim().to_string();
+        let requested_partition_count = request.requested_partition_count;
+        let previous_partition_count = fetch_topic_partition_count(&profile, &topic_name).await?;
+
+        validate_topic_partition_expected_count(
+            &topic_name,
+            previous_partition_count,
+            request.expected_current_partition_count,
+        )?;
+        validate_topic_partition_expansion_change(
+            &topic_name,
+            previous_partition_count,
+            requested_partition_count,
+        )?;
+
+        let audit_created_at = Utc::now().to_rfc3339();
+        let audit_id = Uuid::new_v4().to_string();
+
+        perform_topic_partition_expansion(&profile, &topic_name, requested_partition_count).await?;
+
+        let mut warning_messages = Vec::new();
+        let resulting_partition_count = match fetch_topic_partition_count(&profile, &topic_name).await {
+            Ok(count) => {
+                if count < requested_partition_count {
+                    warning_messages.push(format!(
+                        "Kafka 已接受 Topic 分区扩容请求，但后续校验只读取到 {} 个分区，少于请求的 {} 个。",
+                        count, requested_partition_count
+                    ));
+                }
+                count
+            }
+            Err(error) => {
+                warning_messages.push(format!(
+                    "Kafka 已接受 Topic 分区扩容请求，但后续元数据校验失败：{}",
+                    error
+                ));
+                requested_partition_count
+            }
+        };
+
+        let audit_record = AuditEventRecord {
+            id: audit_id.clone(),
+            event_type: "topic_partitions_expanded".to_string(),
+            target_type: "topic".to_string(),
+            target_ref: Some(topic_name.clone()),
+            actor_profile: Some(request.cluster_profile_id.clone()),
+            cluster_profile_id: Some(request.cluster_profile_id.clone()),
+            outcome: if warning_messages.is_empty() {
+                "success".to_string()
+            } else {
+                "warning".to_string()
+            },
+            summary: format!(
+                "Expanded topic '{}' partitions from {} to {}",
+                topic_name, previous_partition_count, requested_partition_count
+            ),
+            details_json: Some(
+                json!({
+                    "topicName": topic_name,
+                    "previousPartitionCount": previous_partition_count,
+                    "requestedPartitionCount": requested_partition_count,
+                    "resultingPartitionCount": resulting_partition_count,
+                    "expectedCurrentPartitionCount": request.expected_current_partition_count,
+                    "riskAcknowledged": request.risk_acknowledged,
+                    "warningMessages": warning_messages.clone(),
+                })
+                .to_string(),
+            ),
+            created_at: audit_created_at,
+        };
+
+        let audit_ref = match sqlite::insert_audit_event(self.pool, &audit_record).await {
+            Ok(()) => Some(audit_id),
+            Err(error) => {
+                warning_messages.push(format!(
+                    "Kafka 已接受 Topic 分区扩容请求，但审计记录写入失败：{}",
+                    error
+                ));
+                None
+            }
+        };
+
+        Ok(ExpandTopicPartitionsResponseDto {
+            topic_name,
+            previous_partition_count,
+            requested_partition_count,
+            resulting_partition_count,
+            audit_ref,
+            warning: (!warning_messages.is_empty()).then(|| warning_messages.join(" ")),
+        })
+    }
+}
+
+async fn perform_topic_partition_expansion(
+    profile: &ClusterProfileDto,
+    topic_name: &str,
+    requested_partition_count: usize,
+) -> AppResult<()> {
+    let admin_client = build_kafka_admin_client(profile)?;
+    let options = AdminOptions::new()
+        .operation_timeout(Some(Duration::from_secs(30)))
+        .validate_only(false);
+    let partitions = [NewPartitions::new(topic_name, requested_partition_count)];
+    let results = admin_client
+        .create_partitions(partitions.iter(), &options)
+        .await
+        .map_err(|error| {
+            AppError::Network(format!(
+                "failed to request partition expansion for topic '{}': {error}",
+                topic_name
+            ))
+        })?;
+
+    for result in results {
+        match result {
+            Ok(returned_topic) if returned_topic == topic_name => return Ok(()),
+            Ok(returned_topic) => {
+                return Err(AppError::Internal(format!(
+                    "Kafka returned partition expansion result for unexpected topic '{}' while expanding '{}'",
+                    returned_topic, topic_name
+                )));
+            }
+            Err((returned_topic, error_code)) => {
+                return Err(AppError::Unsupported(format!(
+                    "Kafka rejected partition expansion for topic '{}': {:?}",
+                    returned_topic, error_code
+                )));
+            }
+        }
+    }
+
+    Err(AppError::Internal(format!(
+        "Kafka returned no partition expansion result for topic '{}'",
+        topic_name
+    )))
 }
 
 fn perform_topic_config_update(
@@ -607,6 +751,70 @@ fn perform_topic_config_update(
 }
 
 const TOPIC_CONFIG_UPDATE_POLL_TIMEOUT_MS: c_int = 15_000;
+
+fn validate_expand_topic_partitions_request(
+    request: &ExpandTopicPartitionsRequest,
+) -> AppResult<()> {
+    if request.cluster_profile_id.trim().is_empty() {
+        return Err(AppError::Validation(
+            "cluster profile id is required".to_string(),
+        ));
+    }
+
+    if request.topic_name.trim().is_empty() {
+        return Err(AppError::Validation("topic name is required".to_string()));
+    }
+
+    if !request.risk_acknowledged {
+        return Err(AppError::Validation(
+            "topic partition expansion risk acknowledgement is required".to_string(),
+        ));
+    }
+
+    if request.expected_current_partition_count == 0 {
+        return Err(AppError::Validation(
+            "expected current partition count must be greater than zero".to_string(),
+        ));
+    }
+
+    if request.requested_partition_count == 0 {
+        return Err(AppError::Validation(
+            "requested partition count must be greater than zero".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_topic_partition_expected_count(
+    topic_name: &str,
+    current_partition_count: usize,
+    expected_current_partition_count: usize,
+) -> AppResult<()> {
+    if current_partition_count != expected_current_partition_count {
+        return Err(AppError::Validation(format!(
+            "topic '{}' partition count changed before expansion; expected {}, found {}",
+            topic_name, expected_current_partition_count, current_partition_count
+        )));
+    }
+
+    Ok(())
+}
+
+fn validate_topic_partition_expansion_change(
+    topic_name: &str,
+    current_partition_count: usize,
+    requested_partition_count: usize,
+) -> AppResult<()> {
+    if requested_partition_count <= current_partition_count {
+        return Err(AppError::Validation(format!(
+            "topic '{}' partition expansion requires a count greater than current count {}; requested {}",
+            topic_name, current_partition_count, requested_partition_count
+        )));
+    }
+
+    Ok(())
+}
 
 fn validate_update_topic_config_request(request: &UpdateTopicConfigRequest) -> AppResult<()> {
     if request.cluster_profile_id.trim().is_empty() {
@@ -1538,6 +1746,40 @@ fn map_topic_summary(topic: &MetadataTopic) -> TopicSummaryDto {
     }
 }
 
+async fn fetch_topic_partition_count(
+    profile: &ClusterProfileDto,
+    topic_name: &str,
+) -> AppResult<usize> {
+    let profile = profile.clone();
+    let topic_name = topic_name.to_string();
+
+    tokio::task::spawn_blocking(move || {
+        let consumer = build_metadata_consumer(&profile)?;
+        let metadata = consumer
+            .fetch_metadata(Some(&topic_name), Duration::from_secs(5))
+            .map_err(|error| {
+                AppError::Network(format!(
+                    "failed to load topic '{}' metadata for partition expansion: {error}",
+                    topic_name
+                ))
+            })?;
+
+        let topic = metadata
+            .topics()
+            .iter()
+            .find(|topic| topic.name() == topic_name)
+            .ok_or_else(|| AppError::NotFound(format!("topic '{}' was not found", topic_name)))?;
+
+        Ok::<usize, AppError>(topic.partitions().len())
+    })
+    .await
+    .map_err(|error| {
+        AppError::Internal(format!(
+            "failed to join topic partition-count task: {error}"
+        ))
+    })?
+}
+
 fn validate_list_topics_request(request: &ListTopicsRequest) -> AppResult<()> {
     if request.cluster_profile_id.trim().is_empty() {
         return Err(AppError::Validation(
@@ -1587,11 +1829,14 @@ mod tests {
         map_topic_operation_config_entries, validate_get_topic_operations_overview_request,
         validate_topic_config_expected_current_value, validate_topic_config_requested_change,
         validate_topic_config_update_value,
+        validate_expand_topic_partitions_request, validate_topic_partition_expected_count,
+        validate_topic_partition_expansion_change,
         validate_update_topic_config_request,
         TopicGroupSnapshot, ValidationStageDto,
     };
     use crate::models::cluster::ClusterProfileDto;
     use crate::models::topic::{
+        ExpandTopicPartitionsRequest,
         GetTopicOperationsOverviewRequest, TopicOperationConfigEntryDto,
         UpdateTopicConfigRequest,
     };
@@ -1932,6 +2177,61 @@ mod tests {
         assert!(error
             .to_string()
             .contains("already matches the requested value"));
+    }
+
+    #[test]
+    fn topic_partition_expansion_requires_acknowledgement_and_positive_counts() {
+        let missing_acknowledgement = validate_expand_topic_partitions_request(
+            &ExpandTopicPartitionsRequest {
+                cluster_profile_id: "cluster-1".to_string(),
+                topic_name: "orders".to_string(),
+                requested_partition_count: 8,
+                expected_current_partition_count: 6,
+                risk_acknowledged: false,
+            },
+        )
+        .expect_err("missing acknowledgement should fail validation");
+
+        assert_eq!(
+            missing_acknowledgement.to_string(),
+            "validation error: topic partition expansion risk acknowledgement is required"
+        );
+
+        let zero_expected = validate_expand_topic_partitions_request(
+            &ExpandTopicPartitionsRequest {
+                cluster_profile_id: "cluster-1".to_string(),
+                topic_name: "orders".to_string(),
+                requested_partition_count: 8,
+                expected_current_partition_count: 0,
+                risk_acknowledged: true,
+            },
+        )
+        .expect_err("zero expected partition count should fail validation");
+
+        assert!(zero_expected
+            .to_string()
+            .contains("expected current partition count must be greater than zero"));
+    }
+
+    #[test]
+    fn topic_partition_expansion_rejects_stale_no_op_and_shrink_counts() {
+        let stale_error = validate_topic_partition_expected_count("orders", 8, 6)
+            .expect_err("stale expected partition count should fail");
+        assert!(stale_error
+            .to_string()
+            .contains("expected 6, found 8"));
+
+        let no_op_error = validate_topic_partition_expansion_change("orders", 6, 6)
+            .expect_err("same partition count should fail");
+        assert!(no_op_error
+            .to_string()
+            .contains("requires a count greater than current count 6"));
+
+        let shrink_error = validate_topic_partition_expansion_change("orders", 6, 4)
+            .expect_err("lower partition count should fail");
+        assert!(shrink_error
+            .to_string()
+            .contains("requested 4"));
     }
 
     #[test]

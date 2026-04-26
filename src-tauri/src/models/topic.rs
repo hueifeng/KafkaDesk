@@ -132,6 +132,16 @@ pub struct UpdateTopicConfigRequest {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+pub struct ExpandTopicPartitionsRequest {
+    pub cluster_profile_id: String,
+    pub topic_name: String,
+    pub requested_partition_count: usize,
+    pub expected_current_partition_count: usize,
+    pub risk_acknowledged: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateTopicConfigResponseDto {
     pub topic_name: String,
     pub config_key: String,
@@ -141,6 +151,19 @@ pub struct UpdateTopicConfigResponseDto {
     pub requested_value: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resulting_value: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit_ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warning: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ExpandTopicPartitionsResponseDto {
+    pub topic_name: String,
+    pub previous_partition_count: usize,
+    pub requested_partition_count: usize,
+    pub resulting_partition_count: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audit_ref: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
