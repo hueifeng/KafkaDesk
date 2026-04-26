@@ -1,9 +1,10 @@
 use crate::app::state::AppState;
 use crate::models::error::{AppErrorDto, AppResult};
 use crate::models::topic::{
-    GetTopicDetailRequest, GetTopicOperationsOverviewRequest, ListTopicsRequest,
-    TopicDetailResponseDto, TopicOperationsOverviewResponseDto, TopicSummaryDto,
-    UpdateTopicConfigRequest, UpdateTopicConfigResponseDto,
+    ExpandTopicPartitionsRequest, ExpandTopicPartitionsResponseDto, GetTopicDetailRequest,
+    GetTopicOperationsOverviewRequest, ListTopicsRequest, TopicDetailResponseDto,
+    TopicOperationsOverviewResponseDto, TopicSummaryDto, UpdateTopicConfigRequest,
+    UpdateTopicConfigResponseDto,
 };
 use crate::services::topics::TopicService;
 use tauri::State;
@@ -50,6 +51,18 @@ pub async fn update_topic_config(
 ) -> Result<UpdateTopicConfigResponseDto, AppErrorDto> {
     let result: AppResult<UpdateTopicConfigResponseDto> = TopicService::new(state.pool())
         .update_topic_config(request)
+        .await;
+
+    result.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn expand_topic_partitions(
+    state: State<'_, AppState>,
+    request: ExpandTopicPartitionsRequest,
+) -> Result<ExpandTopicPartitionsResponseDto, AppErrorDto> {
+    let result: AppResult<ExpandTopicPartitionsResponseDto> = TopicService::new(state.pool())
+        .expand_topic_partitions(request)
         .await;
 
     result.map_err(Into::into)
