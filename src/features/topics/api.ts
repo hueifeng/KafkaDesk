@@ -1,5 +1,7 @@
 import { invokeCommand } from '@/lib/tauri';
 import type {
+  ExpandTopicPartitionsInput,
+  ExpandTopicPartitionsResponse,
   ListTopicsInput,
   TopicDetailResponse,
   TopicOperationsOverviewResponse,
@@ -32,4 +34,8 @@ export function getTopicOperationsOverview(clusterProfileId: string, topicName: 
 
 export function updateTopicConfig(request: UpdateTopicConfigInput) {
   return invokeCommand<UpdateTopicConfigResponse>('update_topic_config', { request });
+}
+
+export function expandTopicPartitions(request: ExpandTopicPartitionsInput) {
+  return invokeCommand<ExpandTopicPartitionsResponse>('expand_topic_partitions', { request });
 }

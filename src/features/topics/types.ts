@@ -75,12 +75,29 @@ export type UpdateTopicConfigInput = {
   riskAcknowledged: boolean;
 };
 
+export type ExpandTopicPartitionsInput = {
+  clusterProfileId: string;
+  topicName: string;
+  requestedPartitionCount: number;
+  expectedCurrentPartitionCount: number;
+  riskAcknowledged: boolean;
+};
+
 export type UpdateTopicConfigResponse = {
   topicName: string;
   configKey: string;
   previousValue?: string | null;
   requestedValue?: string | null;
   resultingValue?: string | null;
+  auditRef?: string | null;
+  warning?: string | null;
+};
+
+export type ExpandTopicPartitionsResponse = {
+  topicName: string;
+  previousPartitionCount: number;
+  requestedPartitionCount: number;
+  resultingPartitionCount: number;
   auditRef?: string | null;
   warning?: string | null;
 };
