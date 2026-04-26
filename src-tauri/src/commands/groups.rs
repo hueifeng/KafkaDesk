@@ -2,6 +2,7 @@ use crate::app::state::AppState;
 use crate::models::error::{AppErrorDto, AppResult};
 use crate::models::group::{
     GetGroupDetailRequest, GroupDetailResponseDto, GroupSummaryDto, ListGroupsRequest,
+    UpdateGroupTagsRequest,
 };
 use crate::services::groups::GroupService;
 use tauri::State;
@@ -24,6 +25,18 @@ pub async fn get_group_detail(
 ) -> Result<GroupDetailResponseDto, AppErrorDto> {
     let result: AppResult<GroupDetailResponseDto> = GroupService::new(state.pool())
         .get_group_detail(request)
+        .await;
+
+    result.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn update_group_tags(
+    state: State<'_, AppState>,
+    request: UpdateGroupTagsRequest,
+) -> Result<GroupSummaryDto, AppErrorDto> {
+    let result: AppResult<GroupSummaryDto> = GroupService::new(state.pool())
+        .update_group_tags(request)
         .await;
 
     result.map_err(Into::into)

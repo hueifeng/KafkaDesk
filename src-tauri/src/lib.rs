@@ -34,6 +34,7 @@ pub fn run() {
             commands::correlation::update_correlation_rule,
             commands::groups::list_groups,
             commands::groups::get_group_detail,
+            commands::groups::update_group_tags,
             commands::messages::query_messages,
             commands::messages::get_message_detail,
             commands::preferences::get_app_preferences,
@@ -57,6 +58,7 @@ pub fn run() {
             commands::topics::get_topic_operations_overview,
             commands::topics::update_topic_config,
             commands::topics::expand_topic_partitions,
+            commands::topics::update_topic_tags,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run KafkaDesk")

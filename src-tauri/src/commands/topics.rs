@@ -4,7 +4,7 @@ use crate::models::topic::{
     ExpandTopicPartitionsRequest, ExpandTopicPartitionsResponseDto, GetTopicDetailRequest,
     GetTopicOperationsOverviewRequest, ListTopicsRequest, TopicDetailResponseDto,
     TopicOperationsOverviewResponseDto, TopicSummaryDto, UpdateTopicConfigRequest,
-    UpdateTopicConfigResponseDto,
+    UpdateTopicConfigResponseDto, UpdateTopicTagsRequest,
 };
 use crate::services::topics::TopicService;
 use tauri::State;
@@ -63,6 +63,18 @@ pub async fn expand_topic_partitions(
 ) -> Result<ExpandTopicPartitionsResponseDto, AppErrorDto> {
     let result: AppResult<ExpandTopicPartitionsResponseDto> = TopicService::new(state.pool())
         .expand_topic_partitions(request)
+        .await;
+
+    result.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn update_topic_tags(
+    state: State<'_, AppState>,
+    request: UpdateTopicTagsRequest,
+) -> Result<TopicSummaryDto, AppErrorDto> {
+    let result: AppResult<TopicSummaryDto> = TopicService::new(state.pool())
+        .update_topic_tags(request)
         .await;
 
     result.map_err(Into::into)
