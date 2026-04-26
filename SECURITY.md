@@ -56,6 +56,20 @@ Before using live replay paths, verify:
 - delivery timeout/retry behavior matches your operational expectations
 - credentials and TLS material map to the correct environment
 
+### Topic configuration changes
+
+KafkaDesk can update selected Topic configuration values when the connected broker reports the value as editable and the runtime can perform the required Kafka admin operation. Treat these changes as live cluster operations, not cosmetic local edits.
+
+Before applying Topic configuration changes, verify:
+
+- the active cluster/environment is the intended target
+- the current broker value shown in the editor still matches the captured snapshot
+- the requested value is operationally safe for the target Topic
+- the user has explicitly acknowledged the risk prompt
+- unsupported, unavailable, or read-only values remain disabled rather than worked around
+
+If KafkaDesk reports that a config write was applied but verification or audit persistence returned a warning, treat the broker as potentially changed and review the displayed audit reference, warning text, and broker state before retrying.
+
 ### TLS / SSL runtime assumptions
 
 The repository currently builds Kafka TLS support through `rdkafka` with vendored OpenSSL in supported build environments. Downstream consumers that remove or replace that support can change secured-cluster behavior.

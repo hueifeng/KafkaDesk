@@ -18,7 +18,7 @@ Release packaging details live in [`docs/product/release-distribution.md`](./doc
 ## Features
 
 - Configure Kafka clusters and Schema Registry connections
-- Browse topics, inspect topic detail, and check consumer group lag
+- Browse topics, inspect topic detail, update selected Topic configuration values, and check consumer group lag
 - Query and inspect messages with decode support
 - Replay events through explicit, auditable workflows
 - Trace business keys across correlated topics

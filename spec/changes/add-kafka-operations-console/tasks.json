@@ -71,7 +71,7 @@
     "task": "补齐测试、兼容性验证与文档",
     "steps": [
       { "step": "增加 capability 检测、写操作失败、权限不足、版本不支持等测试", "completed": true },
-      { "step": "补充 README/docs 中的运维能力与风险说明", "completed": false },
+      { "step": "补充 README/docs 中的运维能力与风险说明", "completed": true },
       { "step": "定义分阶段发布策略，先启用最有价值且最稳的功能", "completed": false }
     ],
     "passes": false
