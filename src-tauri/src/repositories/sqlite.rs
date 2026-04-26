@@ -18,6 +18,7 @@ use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
 };
+use std::collections::HashMap;
 use std::{path::Path, str::FromStr};
 
 pub async fn create_pool(database_path: &Path) -> AppResult<SqlitePool> {
@@ -183,6 +184,106 @@ pub async fn get_cluster_profile(pool: &SqlitePool, id: &str) -> AppResult<Clust
         last_connected_at: row.try_get("last_connected_at")?,
         is_archived: row.try_get::<i64, _>("is_archived")? != 0,
     })
+}
+
+pub async fn get_topic_tags_map(
+    pool: &SqlitePool,
+    cluster_profile_id: &str,
+) -> AppResult<HashMap<String, Vec<String>>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT topic_name, tags_json
+        FROM topic_tags
+        WHERE cluster_profile_id = ?
+        "#,
+    )
+    .bind(cluster_profile_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut tags = HashMap::new();
+    for row in rows {
+        let topic_name: String = row.try_get("topic_name")?;
+        let tags_json: String = row.try_get("tags_json")?;
+        tags.insert(topic_name, serde_json::from_str(&tags_json).unwrap_or_default());
+    }
+
+    Ok(tags)
+}
+
+pub async fn upsert_topic_tags(
+    pool: &SqlitePool,
+    cluster_profile_id: &str,
+    topic_name: &str,
+    tags: &[String],
+    updated_at: &str,
+) -> AppResult<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO topic_tags (cluster_profile_id, topic_name, tags_json, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(cluster_profile_id, topic_name)
+        DO UPDATE SET tags_json = excluded.tags_json, updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(cluster_profile_id)
+    .bind(topic_name)
+    .bind(serde_json::to_string(tags).map_err(|error| AppError::Internal(error.to_string()))?)
+    .bind(updated_at)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
+pub async fn get_group_tags_map(
+    pool: &SqlitePool,
+    cluster_profile_id: &str,
+) -> AppResult<HashMap<String, Vec<String>>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT group_name, tags_json
+        FROM group_tags
+        WHERE cluster_profile_id = ?
+        "#,
+    )
+    .bind(cluster_profile_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut tags = HashMap::new();
+    for row in rows {
+        let group_name: String = row.try_get("group_name")?;
+        let tags_json: String = row.try_get("tags_json")?;
+        tags.insert(group_name, serde_json::from_str(&tags_json).unwrap_or_default());
+    }
+
+    Ok(tags)
+}
+
+pub async fn upsert_group_tags(
+    pool: &SqlitePool,
+    cluster_profile_id: &str,
+    group_name: &str,
+    tags: &[String],
+    updated_at: &str,
+) -> AppResult<()> {
+    sqlx::query(
+        r#"
+        INSERT INTO group_tags (cluster_profile_id, group_name, tags_json, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(cluster_profile_id, group_name)
+        DO UPDATE SET tags_json = excluded.tags_json, updated_at = excluded.updated_at
+        "#,
+    )
+    .bind(cluster_profile_id)
+    .bind(group_name)
+    .bind(serde_json::to_string(tags).map_err(|error| AppError::Internal(error.to_string()))?)
+    .bind(updated_at)
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 pub async fn list_schema_registry_profiles(
