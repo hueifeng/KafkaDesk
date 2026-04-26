@@ -42,7 +42,7 @@ The first implemented slice is focused on safe Topic configuration management:
 - Topic configuration inspection and editable allowlist support are implemented for selected keys
 - Topic configuration updates require an explicit current-value snapshot and risk acknowledgement
 - Topic partition expansion execution is implemented with current-count snapshot validation, risk acknowledgement, post-write verification, and audit feedback
-- Topic and Consumer Group local tag persistence/detail-page editing are implemented as workstation-local metadata, scoped by cluster profile and object name
+- Topic and Consumer Group local tag persistence, detail-page editing, list filtering, and audit context are implemented as workstation-local metadata, scoped by cluster profile and object name
 - Topic activity visibility is intentionally labeled as offset/lag snapshots, not production or consumption throughput metrics; true traffic-rate views remain pending until a real metrics source exists
 - Topic-level throttling/quota controls are intentionally surfaced as unsupported because Kafka does not expose a general Topic-scoped producer/consumer throughput quota
 - successful writes return applied/audit feedback, including warning states when verification or audit persistence is partial

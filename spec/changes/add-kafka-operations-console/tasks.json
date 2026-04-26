@@ -38,10 +38,10 @@
     "task": "为集群、Topic、消费组增加标签与筛选能力",
     "steps": [
       { "step": "扩展本地数据模型以保存标签与视图偏好", "completed": true },
-      { "step": "增加标签 CRUD 与列表筛选能力", "completed": false },
-      { "step": "把标签集成到管理页面和审计上下文中", "completed": false }
+      { "step": "增加标签 CRUD 与列表筛选能力", "completed": true },
+      { "step": "把标签集成到管理页面和审计上下文中", "completed": true }
     ],
-    "passes": false
+    "passes": true
   },
   {
     "number": 5,
