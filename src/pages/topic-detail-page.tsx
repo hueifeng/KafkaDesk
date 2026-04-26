@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageFrame } from '@/components/layout/page-frame';
 import { useWorkbenchStore } from '@/app/workbench-store';
-import { expandTopicPartitions, getTopicDetail, getTopicOperationsOverview, updateTopicConfig } from '@/features/topics/api';
+import { expandTopicPartitions, getTopicDetail, getTopicOperationsOverview, updateTopicConfig, updateTopicTags } from '@/features/topics/api';
 import type {
   ExpandTopicPartitionsInput,
   ExpandTopicPartitionsResponse,
@@ -12,6 +12,7 @@ import type {
   TopicOperationsOverviewResponse,
   UpdateTopicConfigInput,
   UpdateTopicConfigResponse,
+  UpdateTopicTagsInput,
 } from '@/features/topics/types';
 import type { AppError, ValidationStageStatus } from '@/lib/tauri';
 import { Badge } from '@/components/ui/badge';
@@ -258,6 +259,7 @@ export function TopicDetailPage() {
   const [feedback, setFeedback] = useState<TopicConfigFeedback | null>(null);
   const [lastApplied, setLastApplied] = useState<TopicConfigLastApplied | null>(null);
   const [lastPartitionExpansion, setLastPartitionExpansion] = useState<TopicPartitionExpansionLastApplied | null>(null);
+  const [tagDraft, setTagDraft] = useState('');
 
   const detailQuery = useQuery<TopicDetailResponse, AppError>({
     queryKey: ['topic-detail', activeClusterProfileId, topicName],
@@ -340,6 +342,18 @@ export function TopicDetailPage() {
       setPartitionDraft(null);
       await queryClient.invalidateQueries({ queryKey: ['topic-detail', activeClusterProfileId, topicName] });
       await queryClient.invalidateQueries({ queryKey: ['topic-operations-overview', activeClusterProfileId, topicName] });
+    },
+    onError: (error) => {
+      setFeedback({ tone: 'danger', message: error.message });
+    },
+  });
+
+  const tagMutation = useMutation<unknown, AppError, UpdateTopicTagsInput>({
+    mutationFn: updateTopicTags,
+    onSuccess: async () => {
+      setFeedback({ tone: 'success', message: 'Topic 标签已更新。' });
+      await queryClient.invalidateQueries({ queryKey: ['topic-detail', activeClusterProfileId, topicName] });
+      await queryClient.invalidateQueries({ queryKey: ['topics'] });
     },
     onError: (error) => {
       setFeedback({ tone: 'danger', message: error.message });
@@ -512,11 +526,28 @@ export function TopicDetailPage() {
     });
   };
 
+  const handleSaveTopicTags = () => {
+    if (!activeClusterProfileId || !decodedTopicName) {
+      return;
+    }
+
+    const tags = tagDraft
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    tagMutation.mutate({
+      clusterProfileId: activeClusterProfileId,
+      topicName: decodedTopicName,
+      tags,
+    });
+  };
+
   return (
     <PageFrame
       eyebrow="主题详情"
       title={decodedTopicName ?? '主题详情'}
-      description="查看真实分区元数据，并继续进入消息排查。"
+      description="查看真实分区元数据、offset / lag 快照，并执行受保护的 Topic 运维操作。"
       contextualInfo={
         <div>
           <div className="workspace-note">当前集群与环境由全局 header 统一提供，详情页只保留返回与对象摘要。</div>
@@ -591,8 +622,43 @@ export function TopicDetailPage() {
                 <Badge tone="signal">真实数据</Badge>
               </div>
               <div className="list-row">
+                <div className="min-w-0 flex-1">
+                  <p className="list-row-title">本地标签</p>
+                  <p className="list-row-meta">
+                    {detailQuery.data.topic.tags.length ? detailQuery.data.topic.tags.join(' · ') : '暂无标签'}
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <input
+                      className="field-shell w-full"
+                      value={tagDraft}
+                      placeholder="输入逗号分隔标签，例如 prod, critical"
+                      onChange={(event) => setTagDraft(event.target.value)}
+                    />
+                    <div className="workspace-actions">
+                      <button
+                        type="button"
+                        className="button-shell"
+                        data-variant="ghost"
+                        onClick={() => setTagDraft(detailQuery.data?.topic.tags.join(', ') ?? '')}
+                      >
+                        载入当前标签
+                      </button>
+                      <button
+                        type="button"
+                        className="button-shell"
+                        data-variant="primary"
+                        disabled={tagMutation.isPending}
+                        onClick={handleSaveTopicTags}
+                      >
+                        {tagMutation.isPending ? '保存中…' : '保存标签'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="list-row">
                 <div>
-                  <p className="list-row-title">活跃度</p>
+                  <p className="list-row-title">分区规模</p>
                   <p className="list-row-meta">{detailQuery.data.topic.activityHint ?? '暂无'}</p>
                 </div>
               </div>
@@ -662,6 +728,26 @@ export function TopicDetailPage() {
                             <Badge tone={toBadgeTone(stage.status)}>{formatStageStatus(stage.status)}</Badge>
                           </div>
                         ))}
+                      </div>
+                    </div>
+
+                    <div className="workspace-block">
+                      <div className="workspace-section-label">Topic 活动与限流</div>
+                      <div className="list-stack">
+                        <div className="list-row">
+                          <div>
+                            <p className="list-row-title">Offset / Lag 快照</p>
+                            <p className="list-row-meta">当前页面展示 low watermark、最新可见 offset 与关联消费组 lag 的即时快照，不代表历史吞吐量。</p>
+                          </div>
+                          <Badge tone="info">快照</Badge>
+                        </div>
+                        <div className="list-row">
+                          <div>
+                            <p className="list-row-title">Topic 级限流 / 配额</p>
+                            <p className="list-row-meta">Kafka 通用吞吐配额按 user/client-id 建模；当前版本不暴露误导性的 Topic 级限流写控件。</p>
+                          </div>
+                          <Badge tone="muted">不支持</Badge>
+                        </div>
                       </div>
                     </div>
 

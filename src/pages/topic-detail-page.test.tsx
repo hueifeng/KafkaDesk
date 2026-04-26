@@ -18,6 +18,7 @@ vi.mock('@/features/topics/api', () => ({
   getTopicOperationsOverview: vi.fn(),
   updateTopicConfig: vi.fn(),
   expandTopicPartitions: vi.fn(),
+  updateTopicTags: vi.fn(),
 }));
 
 const mockedGetTopicDetail = vi.mocked(getTopicDetail);
@@ -144,6 +145,7 @@ function buildTopicDetailResponse(): TopicDetailResponse {
       retentionSummary: '7d',
       activityHint: '活跃',
       isFavorite: false,
+      tags: [],
     },
     partitions: [],
     relatedGroups: [],

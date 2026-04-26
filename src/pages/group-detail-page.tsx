@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageFrame } from '@/components/layout/page-frame';
 import { useWorkbenchStore } from '@/app/workbench-store';
-import { getGroupDetail } from '@/features/groups/api';
+import { getGroupDetail, updateGroupTags } from '@/features/groups/api';
 import type { GroupDetailResponse } from '@/features/groups/types';
 import type { AppError } from '@/lib/tauri';
 import { Badge } from '@/components/ui/badge';
@@ -10,14 +11,34 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { TableShell } from '@/components/ui/table-shell';
 
 export function GroupDetailPage() {
+  const queryClient = useQueryClient();
   const { groupName } = useParams<{ groupName: string }>();
   const activeClusterProfileId = useWorkbenchStore((state) => state.activeClusterProfileId);
+  const decodedGroupName = groupName ? decodeURIComponent(groupName) : null;
+  const [tagDraft, setTagDraft] = useState('');
+  const [feedback, setFeedback] = useState<string | null>(null);
 
   const detailQuery = useQuery<GroupDetailResponse, AppError>({
     queryKey: ['group-detail', activeClusterProfileId, groupName],
-    enabled: Boolean(activeClusterProfileId && groupName),
-    queryFn: () => getGroupDetail(activeClusterProfileId!, decodeURIComponent(groupName!)),
+    enabled: Boolean(activeClusterProfileId && decodedGroupName),
+    queryFn: () => getGroupDetail(activeClusterProfileId!, decodedGroupName!),
   });
+
+  const tagMutation = useMutation<unknown, AppError, { clusterProfileId: string; groupName: string; tags: string[] }>({
+    mutationFn: updateGroupTags,
+    onSuccess: async () => {
+      setFeedback('消费组标签已更新。');
+      await queryClient.invalidateQueries({ queryKey: ['group-detail', activeClusterProfileId, groupName] });
+      await queryClient.invalidateQueries({ queryKey: ['groups'] });
+    },
+    onError: (error) => setFeedback(error.message),
+  });
+
+  const handleSaveTags = () => {
+    if (!activeClusterProfileId || !decodedGroupName) return;
+    const tags = tagDraft.split(',').map((tag) => tag.trim()).filter(Boolean);
+    tagMutation.mutate({ clusterProfileId: activeClusterProfileId, groupName: decodedGroupName, tags });
+  };
 
   return (
     <PageFrame
@@ -67,6 +88,8 @@ export function GroupDetailPage() {
                   <div className="workspace-title">{detailQuery.data.group.partitionCount}</div>
                 </div>
               </div>
+
+              {feedback ? <div className="feedback-banner mb-3" data-tone="signal">{feedback}</div> : null}
 
               <div className="workspace-block">
                 <div className="workspace-section-label">主题级积压</div>
@@ -125,6 +148,41 @@ export function GroupDetailPage() {
                 <div>
                   <p className="list-row-title">状态</p>
                   <p className="list-row-meta">{detailQuery.data.group.state}</p>
+                </div>
+              </div>
+              <div className="list-row">
+                <div className="min-w-0 flex-1">
+                  <p className="list-row-title">本地标签</p>
+                  <p className="list-row-meta">
+                    {detailQuery.data.group.tags.length ? detailQuery.data.group.tags.join(' · ') : '暂无标签'}
+                  </p>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <input
+                      className="field-shell w-full"
+                      value={tagDraft}
+                      placeholder="输入逗号分隔标签，例如 prod, critical"
+                      onChange={(event) => setTagDraft(event.target.value)}
+                    />
+                    <div className="workspace-actions">
+                      <button
+                        type="button"
+                        className="button-shell"
+                        data-variant="ghost"
+                        onClick={() => setTagDraft(detailQuery.data?.group.tags.join(', ') ?? '')}
+                      >
+                        载入当前标签
+                      </button>
+                      <button
+                        type="button"
+                        className="button-shell"
+                        data-variant="primary"
+                        disabled={tagMutation.isPending}
+                        onClick={handleSaveTags}
+                      >
+                        {tagMutation.isPending ? '保存中…' : '保存标签'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="list-row">
